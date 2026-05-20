@@ -1211,6 +1211,10 @@ function HomePage() {
           <span className="text-indigo-600 font-black text-xl">P</span>
         </div>
         <span className="text-white font-extrabold text-xl">PollApp</span>
+        <button onClick={()=>go('/login')}
+          className="ml-auto flex items-center gap-2 bg-white/20 hover:bg-white/30 text-white text-sm font-semibold px-4 py-2 rounded-xl transition-colors">
+          <Ico.User/> Espace enseignant
+        </button>
       </nav>
       <div className="flex flex-col items-center px-4 pt-8 pb-16">
         <div className="text-center mb-10 anim-up">
@@ -1221,11 +1225,11 @@ function HomePage() {
         </div>
         {!panel && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5 w-full max-w-xl anim-in">
-            <button onClick={()=>go('/login')} className="lift bg-white rounded-2xl p-7 text-left shadow-lg">
+            <button onClick={()=>setPanel('create')} className="lift bg-white rounded-2xl p-7 text-left shadow-lg">
               <div className="w-12 h-12 bg-indigo-100 rounded-2xl flex items-center justify-center mb-4 text-2xl">🎯</div>
               <h2 className="text-lg font-bold text-gray-900 mb-1">Créer un événement</h2>
-              <p className="text-gray-500 text-sm mb-4">Enseignant — connectez-vous pour créer et piloter vos questions.</p>
-              <span className="flex items-center gap-1 text-indigo-600 font-semibold text-sm">Se connecter <Ico.Chevron/></span>
+              <p className="text-gray-500 text-sm mb-4">Présentateur — créez et pilotez vos questions.</p>
+              <span className="flex items-center gap-1 text-indigo-600 font-semibold text-sm">Commencer <Ico.Chevron/></span>
             </button>
             <button onClick={()=>setPanel('join')} className="lift bg-white rounded-2xl p-7 text-left shadow-lg">
               <div className="w-12 h-12 bg-violet-100 rounded-2xl flex items-center justify-center mb-4 text-2xl">🙋</div>
