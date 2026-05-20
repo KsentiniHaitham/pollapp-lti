@@ -689,9 +689,8 @@ function PresenterPage({ code, ltiUser, onNewSession }) {
   };
 
   const selQ       = (ev.questions || []).find(q => q.id===selId) || null;
-  const selAnswers = selQ
-    ? (Array.isArray((ev.answers||{})[selId]) ? ev.answers[selId] : Object.values((ev.answers||{})[selId]||{}))
-    : [];
+  /* answers/{qId} est un objet {pid: {...}} depuis le fix mobile */
+  const selAnswers = selQ ? Object.values((ev.answers||{})[selId] || {}) : [];
   const isLive  = ev.launched && ev.activeQId===selId;
   const joinUrl = baseUrl() + '#/join/' + ev.code;
 
@@ -756,7 +755,7 @@ function PresenterPage({ code, ltiUser, onNewSession }) {
             {(ev.questions || []).map((q,i) => {
               const cfg  = T[q.type];
               const live = ev.activeQId===q.id && ev.launched;
-              const cnt  = Array.isArray((ev.answers||{})[q.id]) ? ev.answers[q.id].length : Object.keys((ev.answers||{})[q.id]||{}).length;
+              const cnt  = Object.keys((ev.answers||{})[q.id] || {}).length;
               const sel  = selId===q.id;
               return (
                 <div key={q.id} onClick={()=>{setSelId(q.id);setEditor(null);}}
@@ -989,16 +988,14 @@ function ParticipantPage({ initCode, ltiUser, hideBranding }) {
 
   const submit = (value) => {
     if (!ev || !ev.activeQId || !ev.launched) return;
-    const participantName = ltiUser?.name || null;
-    evRef(code).transaction(e => {
-      if (!e || !e.activeQId || !e.launched) return;
-      const existing = Array.isArray(e.answers[e.activeQId]) ? e.answers[e.activeQId] : Object.values(e.answers[e.activeQId]||{});
-      const prev = existing.filter(a => a.pid !== pid);
-      return {
-        ...e,
-        answers: { ...e.answers, [e.activeQId]: [...prev, {pid, name: participantName, v: value, ts: Date.now()}] },
-      };
-    });
+    /* Écriture directe sur le chemin de l'élève :
+       plus fiable sur mobile que les transactions (pas de null initial,
+       fonctionne hors connexion, pas de race condition) */
+    fireDb
+      .ref('events/' + code.toUpperCase() + '/answers/' + ev.activeQId + '/' + pid)
+      .set({ pid, name: ltiUser?.name || null, v: value, ts: Date.now() })
+      .then(() => console.log('[submit] réponse envoyée ✓'))
+      .catch(err => console.error('[submit] erreur Firebase:', err.message));
   };
 
   /* JOIN FORM */
@@ -1051,8 +1048,9 @@ function ParticipantPage({ initCode, ltiUser, hideBranding }) {
 
   const curQ     = ev.activeQId ? (ev.questions || []).find(q => q.id===ev.activeQId) : null;
   const isActive = ev.launched && !!curQ;
-  const existingAnswers = curQ ? (Array.isArray((ev.answers||{})[ev.activeQId]) ? ev.answers[ev.activeQId] : Object.values((ev.answers||{})[ev.activeQId]||{})) : [];
-  const answered = !!(ev.activeQId && existingAnswers.some(a => a.pid===pid));
+  /* Les réponses sont désormais stockées sous answers/{qId}/{pid} (objet) */
+  const qAnswers = ev.activeQId ? ((ev.answers||{})[ev.activeQId] || {}) : {};
+  const answered = !!(ev.activeQId && qAnswers[pid]);
   const cfg      = curQ ? T[curQ.type] : null;
 
   return (
