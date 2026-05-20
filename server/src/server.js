@@ -81,20 +81,15 @@ Provider.onConnect(async (token, _req, res) => {
 });
 
 /* ════════════════════════════════════════════════════════════════
-   2b. Routes non protégées par LTI
-   - /api/* → nos endpoints REST (auth, platform, health)
-   - /static/* → assets du frontend
-   Sans whitelist, ltijs intercepte tout et renvoie 401.
+   2b. Gestion des accès sans token LTI
+   - Routes /api/* → on passe au routeur Express (next())
+   - Autres routes → on sert le SPA React directement
+   On utilise onInvalidToken plutôt que whitelist car c'est plus
+   fiable sur toutes les méthodes HTTP (GET, POST, etc.).
 ════════════════════════════════════════════════════════════════ */
-Provider.whitelist(
-  new RegExp('^/api/'),
-);
-
-/* Accès direct navigateur sans token → servir le SPA React.
-   On supprime COEP ici car ltijs envoie la réponse avant que
-   le middleware Express n'ait la chance de modifier les headers. */
 const CLIENT = path.join(__dirname, '../../client');
-Provider.onInvalidToken((_req, res) => {
+Provider.onInvalidToken((req, res, next) => {
+  if (req.path.startsWith('/api/')) return next();
   res.removeHeader('Cross-Origin-Embedder-Policy');
   res.removeHeader('Cross-Origin-Opener-Policy');
   res.sendFile(path.join(CLIENT, 'index.html'));
