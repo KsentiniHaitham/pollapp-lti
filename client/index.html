@@ -124,12 +124,22 @@ function useRoute() {
 }
 
 /* â”€â”€ LIVE HOOKS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* Normalise l'event Firebase : garantit que questions/answers existent toujours */
+const normalizeEv = (val) => {
+  if (!val) return null;
+  return {
+    ...val,
+    questions: Array.isArray(val.questions) ? val.questions : [],
+    answers:   val.answers && typeof val.answers === 'object' ? val.answers : {},
+  };
+};
+
 function useLive(code) {
   const [ev, setEv] = useState(null);
   useEffect(() => {
     if (!code || !fireDb) return;
     const ref = evRef(code);
-    const cb  = snap => setEv(snap.val());
+    const cb  = snap => setEv(normalizeEv(snap.val()));
     ref.on('value', cb);
     return () => ref.off('value', cb);
   }, [code]);
@@ -651,8 +661,9 @@ function PresenterPage({ code, ltiUser, onNewSession }) {
 
   const saveQ = (q) => {
     mutate(e => {
-      const exists = e.questions.some(x => x.id === q.id);
-      const questions = exists ? e.questions.map(x => x.id===q.id?q:x) : [...e.questions, q];
+      const qs     = Array.isArray(e.questions) ? e.questions : [];
+      const exists = qs.some(x => x.id === q.id);
+      const questions = exists ? qs.map(x => x.id===q.id?q:x) : [...qs, q];
       return {...e, questions};
     });
     setSelId(q.id); setEditor(null);
@@ -661,7 +672,7 @@ function PresenterPage({ code, ltiUser, onNewSession }) {
   const deleteQ = (qId) => {
     mutate(e => ({
       ...e,
-      questions:  e.questions.filter(q => q.id!==qId),
+      questions:  (Array.isArray(e.questions) ? e.questions : []).filter(q => q.id!==qId),
       activeQId:  e.activeQId===qId ? null  : e.activeQId,
       launched:   e.activeQId===qId ? false : e.launched,
     }));
