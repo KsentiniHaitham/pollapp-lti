@@ -963,8 +963,10 @@ function ParticipantPage({ initCode, ltiUser, hideBranding }) {
 
   const [pid] = useState(() => {
     if (ltiUser?.id) return ltiUser.id;
-    let id = localStorage.getItem('pollapp_pid');
-    if (!id) { id = genId(); localStorage.setItem('pollapp_pid', id); }
+    /* sessionStorage = unique PAR ONGLET (pas partagé entre onglets)
+       → chaque onglet/appareil est un participant distinct, même pour les tests */
+    let id = sessionStorage.getItem('pollapp_pid');
+    if (!id) { id = genId(); sessionStorage.setItem('pollapp_pid', id); }
     return id;
   });
 
