@@ -149,15 +149,40 @@ function useLiveCourseEvent(courseId) {
 }
 
 /* ── LTI HOOK ───────────────────────────────────────────────── */
+/* Après un launch LTI, le serveur redirige vers /?lti=1&role=...
+   Le frontend lit ces params, les stocke en sessionStorage,
+   puis nettoie l'URL.                                          */
 function useLTIUser() {
   const [user,    setUser]    = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
+
   useEffect(() => {
-    fetch('/api/user', { credentials: 'include' })
-      .then(r => r.ok ? r.json() : null)
-      .then(data => { setUser(data); setLoading(false); })
-      .catch(() => setLoading(false));
+    // 1. Vérifier les paramètres URL (juste après un launch LTI)
+    const params = new URLSearchParams(location.search);
+    if (params.get('lti') === '1') {
+      const u = {
+        id:         params.get('id')         || genId(),
+        name:       params.get('name')       || 'Anonyme',
+        email:      params.get('email')      || '',
+        role:       params.get('role')       || 'learner',
+        courseId:   params.get('courseId')   || null,
+        courseName: params.get('courseName') || 'Cours',
+      };
+      sessionStorage.setItem('pollapp_lti', JSON.stringify(u));
+      setUser(u);
+      // Nettoyer l'URL (retirer les params sensibles)
+      history.replaceState({}, '', '/');
+      return;
+    }
+
+    // 2. Vérifier sessionStorage (navigation interne après le launch)
+    const stored = sessionStorage.getItem('pollapp_lti');
+    if (stored) {
+      try { setUser(JSON.parse(stored)); } catch (_) {}
+    }
+    // Si rien → mode standalone (pas de LTI)
   }, []);
+
   return { user, loading };
 }
 
