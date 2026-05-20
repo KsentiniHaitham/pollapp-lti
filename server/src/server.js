@@ -81,6 +81,15 @@ Provider.onConnect(async (token, _req, res) => {
 });
 
 /* ════════════════════════════════════════════════════════════════
+   2b. Accès direct (navigateur sans token LTI) → servir le SPA
+   Permet aux enseignants d'accéder à l'app via le web sans Moodle.
+════════════════════════════════════════════════════════════════ */
+const CLIENT = path.join(__dirname, '../../client');
+Provider.onInvalidToken((_req, res) => {
+  res.sendFile(path.join(CLIENT, 'index.html'));
+});
+
+/* ════════════════════════════════════════════════════════════════
    3.  API REST
 ════════════════════════════════════════════════════════════════ */
 const api = express.Router();
@@ -193,11 +202,9 @@ api.get('/health', (_req, res) => res.json({ status: 'ok' }));
 Provider.app.use('/api', api);
 
 /* ════════════════════════════════════════════════════════════════
-   4.  FRONTEND STATIQUE
+   4.  FRONTEND STATIQUE (assets JS/CSS/images)
 ════════════════════════════════════════════════════════════════ */
-const CLIENT = path.join(__dirname, '../../client');
 Provider.app.use(express.static(CLIENT));
-Provider.app.get('*', (_req, res) => res.sendFile(path.join(CLIENT, 'index.html')));
 
 /* ════════════════════════════════════════════════════════════════
    5.  DÉMARRAGE
