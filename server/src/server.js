@@ -90,9 +90,13 @@ Provider.whitelist(
   { route: new RegExp('^/api/'), method: 'all' },
 );
 
-/* Accès direct navigateur sans token → servir le SPA React */
+/* Accès direct navigateur sans token → servir le SPA React.
+   On supprime COEP ici car ltijs envoie la réponse avant que
+   le middleware Express n'ait la chance de modifier les headers. */
 const CLIENT = path.join(__dirname, '../../client');
 Provider.onInvalidToken((_req, res) => {
+  res.removeHeader('Cross-Origin-Embedder-Policy');
+  res.removeHeader('Cross-Origin-Opener-Policy');
   res.sendFile(path.join(CLIENT, 'index.html'));
 });
 
