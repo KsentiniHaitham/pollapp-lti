@@ -1,9 +1,9 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="fr">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>PollApp v2</title>
+  <title>PollApp</title>
   <!-- React -->
   <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
@@ -49,9 +49,9 @@ const { useState, useEffect, useMemo, useRef } = React;
 /* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
    ðŸ”§  CONFIGURATION FIREBASE
    â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-   1. CrÃ©er un projet sur https://console.firebase.google.com
+   1. Créer un projet sur https://console.firebase.google.com
    2. Ajouter une app Web â†’ copier la config
-   3. Activer "Realtime Database" â†’ RÃ¨gles :
+   3. Activer "Realtime Database" â†’ Règles :
       { "rules": { ".read": true, ".write": true } }
    4. Remplacer les valeurs ci-dessous
 â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
@@ -159,8 +159,8 @@ function useLiveCourseEvent(courseId) {
 }
 
 /* â”€â”€ AUTH HOOK â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
-/* GÃ¨re l'identitÃ© de l'utilisateur dans les 3 cas :
-   - Juste aprÃ¨s un launch LTI (params URL)
+/* Gère l'identité de l'utilisateur dans les 3 cas :
+   - Juste après un launch LTI (params URL)
    - Navigation interne LTI (sessionStorage)
    - Connexion web enseignant (localStorage JWT)              */
 function useLTIUser() {
@@ -187,7 +187,7 @@ function useLTIUser() {
       return;
     }
 
-    // 2. sessionStorage â†’ navigation interne aprÃ¨s un launch LTI
+    // 2. sessionStorage â†’ navigation interne après un launch LTI
     const stored = sessionStorage.getItem('pollapp_lti');
     if (stored) {
       try { setUser({ ...JSON.parse(stored), source: 'lti' }); } catch (_) {}
@@ -200,7 +200,7 @@ function useLTIUser() {
     if (token) {
       fetch('/api/auth/me', { headers: { Authorization: 'Bearer ' + token } })
         .then(r => r.ok ? r.json() : Promise.reject())
-        .then(u => setUser({ ...u, source: 'web', courseId: 'web_' + u.id, courseName: 'Mes Ã©vÃ©nements' }))
+        .then(u => setUser({ ...u, source: 'web', courseId: 'web_' + u.id, courseName: 'Mes événements' }))
         .catch(() => localStorage.removeItem('pollapp_web_token'))
         .finally(() => setLoading(false));
       return;
@@ -214,10 +214,10 @@ function useLTIUser() {
 
 /* â”€â”€ TYPE CONFIG â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 const T = {
-  mcq:       { label:'Choix multiple',   icon:'ðŸ“Š', bg:'bg-indigo-100', tx:'text-indigo-700', grad:'from-indigo-500 to-violet-600'  },
-  wordcloud: { label:'Nuage de mots',    icon:'â˜ï¸',  bg:'bg-sky-100',    tx:'text-sky-700',    grad:'from-sky-500 to-blue-600'       },
-  open:      { label:'Question ouverte', icon:'âœï¸',  bg:'bg-emerald-100',tx:'text-emerald-700',grad:'from-emerald-500 to-teal-600'   },
-  rating:    { label:'Ã‰valuation',       icon:'â­',  bg:'bg-amber-100',  tx:'text-amber-700',  grad:'from-amber-400 to-orange-500'   },
+  mcq:       { label:'Choix multiple',   icon:'\u{1F4CA}', bg:'bg-indigo-100', tx:'text-indigo-700', grad:'from-indigo-500 to-violet-600'  },
+  wordcloud: { label:'Nuage de mots',    icon:'\u{2601}',  bg:'bg-sky-100',    tx:'text-sky-700',    grad:'from-sky-500 to-blue-600'       },
+  open:      { label:'Question ouverte', icon:'\u{270D}',  bg:'bg-emerald-100',tx:'text-emerald-700',grad:'from-emerald-500 to-teal-600'   },
+  rating:    { label:'\u{C9}valuation',  icon:'\u{2B50}',  bg:'bg-amber-100',  tx:'text-amber-700',  grad:'from-amber-400 to-orange-500'   },
 };
 
 /* â”€â”€ ICONS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
@@ -239,7 +239,7 @@ const Ico = {
 
 /* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
    Ã‰CRAN DE CONFIGURATION FIREBASE
-   AffichÃ© si les valeurs ne sont pas encore remplacÃ©es.
+   Affiché si les valeurs ne sont pas encore remplacées.
 â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 function FirebaseSetupScreen() {
   return (
@@ -255,9 +255,9 @@ function FirebaseSetupScreen() {
         <ol className="space-y-3 text-sm text-gray-700">
           {[
             ['1','Va sur','https://console.firebase.google.com','console.firebase.google.com'],
-            ['2','CrÃ©e un projet et ajoute une app Web','',''],
+            ['2','Crée un projet et ajoute une app Web','',''],
             ['3','Active "Realtime Database" â†’ choisir Europe (europe-west1)','',''],
-            ['4','Dans RÃ¨gles, colle :','',''],
+            ['4','Dans Règles, colle :','',''],
           ].map(([n,text,url,label]) => (
             <li key={n} className="flex gap-3">
               <span className="w-6 h-6 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold text-xs flex-shrink-0">{n}</span>
@@ -337,7 +337,7 @@ function LTIBanner({ user }) {
       {user.courseName && user.source !== 'web' && <span className="text-gray-400">Â· {user.courseName}</span>}
       {user.source === 'web' && (
         <button onClick={logout} className="ml-auto flex items-center gap-1.5 text-gray-400 hover:text-red-500 transition-colors text-xs font-medium">
-          <Ico.Logout/> DÃ©connexion
+          <Ico.Logout/> Déconnexion
         </button>
       )}
     </div>
@@ -365,7 +365,7 @@ function LTIPresenter({ user }) {
     </div>
   );
 
-  // Aucun Ã©vÃ©nement actif â†’ proposer d'en crÃ©er un
+  // Aucun événement actif â†’ proposer d'en créer un
   if (!courseEventCode || creating) return (
     <div className="min-h-screen bg-slate-50">
       <LTIBanner user={user}/>
@@ -373,7 +373,7 @@ function LTIPresenter({ user }) {
         <div className="bg-white rounded-2xl p-8 w-full max-w-sm shadow-xl anim-in">
           <div className="text-4xl mb-4">ðŸŽ¯</div>
           <h2 className="text-xl font-bold text-gray-900 mb-1">
-            {creating ? 'Nouveau sondage' : 'DÃ©marrer un sondage'}
+            {creating ? 'Nouveau sondage' : 'Démarrer un sondage'}
           </h2>
           <p className="text-gray-500 text-sm mb-5">
             {creating ? 'Nom du sondage (optionnel)' : `Aucun sondage actif pour "${user.courseName}".`}
@@ -385,7 +385,7 @@ function LTIPresenter({ user }) {
             autoFocus/>
           <button onClick={createAndStart}
             className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl transition-colors">
-            CrÃ©er et dÃ©marrer â†’
+            Créer et démarrer â†’
           </button>
           {courseEventCode && !creating && (
             <button onClick={() => setCreating(false)}
@@ -398,7 +398,7 @@ function LTIPresenter({ user }) {
     </div>
   );
 
-  // Ã‰vÃ©nement actif â†’ vue prÃ©sentateur complÃ¨te
+  // Ã‰vénement actif â†’ vue présentateur complète
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
       <LTIBanner user={user}/>
@@ -414,7 +414,7 @@ function LTIPresenter({ user }) {
 }
 
 /* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-   MODE LTI â€” PARTICIPANT (Ã©tudiant)
+   MODE LTI â€” PARTICIPANT (étudiant)
 â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 function LTIParticipant({ user }) {
   const courseEventCode = useLiveCourseEvent(user.courseId);
@@ -432,7 +432,7 @@ function LTIParticipant({ user }) {
         <div className="text-center anim-up">
           <div className="w-24 h-24 rounded-3xl bg-indigo-100 flex items-center justify-center mx-auto mb-5 text-5xl float">â³</div>
           <h2 className="text-2xl font-bold text-gray-800 mb-2">En attente du professeurâ€¦</h2>
-          <p className="text-gray-500 text-sm">Le sondage dÃ©marrera automatiquement.</p>
+          <p className="text-gray-500 text-sm">Le sondage démarrera automatiquement.</p>
         </div>
       </div>
     </div>
@@ -463,7 +463,7 @@ function MCQForm({ q, onChange }) {
     <div className="space-y-2.5">
       <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer select-none">
         <input type="checkbox" checked={q.multi} onChange={e => onChange({...q, multi:e.target.checked})} className="rounded"/>
-        Plusieurs rÃ©ponses possibles
+        Plusieurs réponses possibles
       </label>
       {q.options.map((opt,i) => (
         <div key={i} className="flex items-center gap-2">
@@ -517,7 +517,7 @@ function QuestionEditor({ initial, onSave, onCancel }) {
       {q.type === 'mcq'       && <MCQForm q={q} onChange={setQ}/>}
       {q.type === 'rating'    && <RatingForm q={q} onChange={setQ}/>}
       {q.type === 'wordcloud' && <p className="text-sm text-gray-400 italic">Les participants soumettront un mot ou une courte expression.</p>}
-      {q.type === 'open'      && <p className="text-sm text-gray-400 italic">Les participants rÃ©pondent librement en texte.</p>}
+      {q.type === 'open'      && <p className="text-sm text-gray-400 italic">Les participants répondent librement en texte.</p>}
       <div className="flex justify-end gap-3 mt-6">
         <button onClick={onCancel} className="px-4 py-2 text-gray-500 hover:text-gray-800 text-sm font-medium transition-colors">Annuler</button>
         <button onClick={() => valid && onSave(q)} disabled={!valid}
@@ -541,7 +541,7 @@ function MCQResults({ q, answers }) {
   }));
   return (
     <div className="space-y-3">
-      <p className="text-sm text-gray-400">{total} rÃ©ponse{total!==1?'s':''}</p>
+      <p className="text-sm text-gray-400">{total} réponse{total!==1?'s':''}</p>
       {votes.map((v,i) => {
         const pct = total > 0 ? Math.round(v.n/total*100) : 0;
         return (
@@ -601,7 +601,7 @@ function RatingResults({ q, answers }) {
         <span className="text-5xl font-black text-amber-500">{avg.toFixed(1)}</span>
         <div>
           <div className="flex gap-0.5 mb-0.5">{Array.from({length:q.maxStars},(_,i)=><Ico.Star key={i} on={i<Math.round(avg)} s={18}/>)}</div>
-          <p className="text-xs text-gray-400">{answers.length} rÃ©ponse{answers.length!==1?'s':''} Â· sur {q.maxStars}</p>
+          <p className="text-xs text-gray-400">{answers.length} réponse{answers.length!==1?'s':''} Â· sur {q.maxStars}</p>
         </div>
       </div>
       <div className="space-y-1.5">
@@ -653,7 +653,7 @@ function PresenterPage({ code, ltiUser, onNewSession }) {
 
   if (!ev) return (
     <div className="h-full flex items-center justify-center p-8">
-      <p className="text-gray-400">Chargement de l'Ã©vÃ©nementâ€¦</p>
+      <p className="text-gray-400">Chargement de l'événementâ€¦</p>
     </div>
   );
 
@@ -768,7 +768,7 @@ function PresenterPage({ code, ltiUser, onNewSession }) {
                     <p className="text-sm text-gray-700 font-semibold truncate">{q.text||'(sans titre)'}</p>
                     <div className="flex items-center gap-2 mt-0.5">
                       {live && <span className="text-xs text-green-600 font-bold live-dot">â— En direct</span>}
-                      {cnt>0 && <span className="text-xs text-gray-400">{cnt} rÃ©p.</span>}
+                      {cnt>0 && <span className="text-xs text-gray-400">{cnt} rép.</span>}
                     </div>
                   </div>
                   <button onClick={e=>{e.stopPropagation();deleteQ(q.id);}}
@@ -793,8 +793,8 @@ function PresenterPage({ code, ltiUser, onNewSession }) {
             <div className="h-full flex items-center justify-center">
               <div className="text-center max-w-sm">
                 <div className="w-20 h-20 bg-indigo-100 rounded-3xl flex items-center justify-center mx-auto mb-4 text-4xl">ðŸŽ¯</div>
-                <h2 className="text-xl font-bold text-gray-700 mb-2">PrÃªt !</h2>
-                <p className="text-gray-400 text-sm mb-6">CrÃ©ez une question ou sÃ©lectionnez-en une Ã  gauche.</p>
+                <h2 className="text-xl font-bold text-gray-700 mb-2">Prêt !</h2>
+                <p className="text-gray-400 text-sm mb-6">Créez une question ou sélectionnez-en une à gauche.</p>
                 <div className="bg-white rounded-2xl border border-gray-200 p-4 text-left">
                   <p className="text-xs text-gray-400 mb-3">Les participants scannent ou entrent :</p>
                   <div className="flex items-center gap-4">
@@ -828,7 +828,7 @@ function PresenterPage({ code, ltiUser, onNewSession }) {
                       <Ico.Edit/> Modifier
                     </button>
                     {isLive
-                      ? <button onClick={stop} className="flex items-center gap-1.5 px-4 py-1.5 bg-red-500 hover:bg-red-600 text-white text-xs font-bold rounded-lg transition-colors"><Ico.Stop/> ArrÃªter</button>
+                      ? <button onClick={stop} className="flex items-center gap-1.5 px-4 py-1.5 bg-red-500 hover:bg-red-600 text-white text-xs font-bold rounded-lg transition-colors"><Ico.Stop/> Arrêter</button>
                       : <button onClick={()=>launch(selQ.id)} className="flex items-center gap-1.5 px-4 py-1.5 bg-green-500 hover:bg-green-600 text-white text-xs font-bold rounded-lg transition-colors"><Ico.Play/> Lancer</button>
                     }
                   </div>
@@ -842,7 +842,7 @@ function PresenterPage({ code, ltiUser, onNewSession }) {
                         {o||<em className="text-gray-300">â€”</em>}
                       </li>
                     ))}
-                    {selQ.multi && <p className="text-xs text-gray-400 mt-1">Plusieurs rÃ©ponses autorisÃ©es</p>}
+                    {selQ.multi && <p className="text-xs text-gray-400 mt-1">Plusieurs réponses autorisées</p>}
                   </ul>
                 )}
                 {selQ.type==='rating' && <div className="flex gap-1">{Array.from({length:selQ.maxStars},(_,i)=><Ico.Star key={i} on s={22}/>)}</div>}
@@ -856,8 +856,8 @@ function PresenterPage({ code, ltiUser, onNewSession }) {
               {(isLive || selAnswers.length > 0) && (
                 <div className="bg-white rounded-2xl border border-gray-200 p-6">
                   <div className="flex items-center justify-between mb-4">
-                    <h3 className="font-bold text-gray-800">RÃ©sultats en direct</h3>
-                    <span className="text-sm text-gray-400 bg-gray-100 px-3 py-1 rounded-full">{selAnswers.length} rÃ©ponse{selAnswers.length!==1?'s':''}</span>
+                    <h3 className="font-bold text-gray-800">Résultats en direct</h3>
+                    <span className="text-sm text-gray-400 bg-gray-100 px-3 py-1 rounded-full">{selAnswers.length} réponse{selAnswers.length!==1?'s':''}</span>
                   </div>
                   <LiveResults q={selQ} answers={selAnswers}/>
                 </div>
@@ -920,7 +920,7 @@ function OpenAnswer({ onSubmit }) {
   const ok = val.trim().length > 0;
   return (
     <div>
-      <textarea value={val} onChange={e=>setVal(e.target.value)} placeholder="Tapez votre rÃ©ponseâ€¦"
+      <textarea value={val} onChange={e=>setVal(e.target.value)} placeholder="Tapez votre réponseâ€¦"
         rows={4} maxLength={500} className="w-full px-4 py-3 rounded-2xl border-2 border-gray-200 focus:border-emerald-400 text-gray-800 resize-none text-base mb-1" autoFocus/>
       <p className="text-xs text-gray-400 text-right mb-3">{val.length}/500</p>
       <button onClick={()=>ok&&onSubmit(val.trim())} disabled={!ok}
@@ -1009,7 +1009,7 @@ function ParticipantPage({ initCode, ltiUser, hideBranding }) {
         <div className="text-center mb-6">
           <div className="w-16 h-16 bg-indigo-100 rounded-2xl flex items-center justify-center mx-auto mb-3 text-3xl">ðŸ™‹</div>
           <h1 className="text-2xl font-bold text-gray-900">Rejoindre</h1>
-          <p className="text-gray-500 text-sm mt-1">Entrez le code affichÃ© par le prÃ©sentateur</p>
+          <p className="text-gray-500 text-sm mt-1">Entrez le code affiché par le présentateur</p>
         </div>
         <input value={input} onChange={e=>{setInput(e.target.value.toUpperCase());setErr('');}}
           placeholder="ABC123" maxLength={6} autoFocus
@@ -1036,7 +1036,7 @@ function ParticipantPage({ initCode, ltiUser, hideBranding }) {
             <h2 className="text-xl font-bold text-gray-900 mb-2">Code introuvable</h2>
             <p className="text-gray-500 text-sm mb-6">Le code <span className="font-bold text-indigo-600">{code}</span> n'existe pas.</p>
             <button onClick={()=>{setJoined(false);setNotFound(false);setInput(code);}}
-              className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl transition-colors">RÃ©essayer</button>
+              className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl transition-colors">Réessayer</button>
           </>
         ) : (
           <>
@@ -1068,7 +1068,7 @@ function ParticipantPage({ initCode, ltiUser, hideBranding }) {
       )}
       {ltiUser && (
         <div className="bg-indigo-50 px-4 py-2 text-sm text-indigo-700 font-medium border-b border-indigo-100">
-          ðŸ‘‹ ConnectÃ© en tant que <strong>{ltiUser.name}</strong>
+          ðŸ‘‹ Connecté en tant que <strong>{ltiUser.name}</strong>
         </div>
       )}
 
@@ -1078,7 +1078,7 @@ function ParticipantPage({ initCode, ltiUser, hideBranding }) {
             <div className="text-center py-16 anim-up">
               <div className="w-24 h-24 rounded-3xl bg-indigo-100 flex items-center justify-center mx-auto mb-6 text-5xl float">â³</div>
               <h2 className="text-2xl font-bold text-gray-800 mb-2">En attenteâ€¦</h2>
-              <p className="text-gray-500">Le prÃ©sentateur n'a pas encore lancÃ© de question.</p>
+              <p className="text-gray-500">Le présentateur n'a pas encore lancé de question.</p>
             </div>
           )}
           {isActive && (
@@ -1090,8 +1090,8 @@ function ParticipantPage({ initCode, ltiUser, hideBranding }) {
               {answered ? (
                 <div className="bg-white rounded-2xl border-2 border-green-200 p-8 text-center anim-in">
                   <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-3"><Ico.Check s={30}/></div>
-                  <h3 className="text-xl font-bold text-green-700 mb-1">RÃ©ponse envoyÃ©e !</h3>
-                  <p className="text-gray-400 text-sm">En attente des rÃ©sultatsâ€¦</p>
+                  <h3 className="text-xl font-bold text-green-700 mb-1">Réponse envoyée !</h3>
+                  <p className="text-gray-400 text-sm">En attente des résultatsâ€¦</p>
                 </div>
               ) : (
                 <div className="bg-white rounded-2xl p-5 border border-gray-100">
@@ -1110,7 +1110,7 @@ function ParticipantPage({ initCode, ltiUser, hideBranding }) {
 }
 
 /* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-   PAGE LOGIN / INSCRIPTION (accÃ¨s web enseignant)
+   PAGE LOGIN / INSCRIPTION (accès web enseignant)
 â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 function LoginPage() {
   const [mode, setMode] = useState('login');
@@ -1133,7 +1133,7 @@ function LoginPage() {
       localStorage.setItem('pollapp_web_token', data.token);
       location.href = '/';
     } catch {
-      setErr('Erreur rÃ©seau, rÃ©essayez.');
+      setErr('Erreur réseau, réessayez.');
     } finally {
       setBusy(false);
     }
@@ -1150,7 +1150,7 @@ function LoginPage() {
             <span className="text-white font-black text-2xl">P</span>
           </div>
           <h1 className="text-2xl font-extrabold text-gray-900">
-            {mode === 'login' ? 'Connexion' : 'CrÃ©er un compte'}
+            {mode === 'login' ? 'Connexion' : 'Créer un compte'}
           </h1>
           <p className="text-gray-400 text-sm mt-1">Espace enseignant</p>
         </div>
@@ -1174,20 +1174,20 @@ function LoginPage() {
 
         <button onClick={submit} disabled={busy}
           className="w-full mt-5 py-3 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-bold rounded-xl transition-colors text-sm">
-          {busy ? 'Chargementâ€¦' : mode === 'login' ? 'Se connecter â†’' : 'CrÃ©er mon compte â†’'}
+          {busy ? 'Chargementâ€¦' : mode === 'login' ? 'Se connecter â†’' : 'Créer mon compte â†’'}
         </button>
 
         <p className="text-center text-sm text-gray-400 mt-4">
-          {mode === 'login' ? 'Pas encore de compte ?' : 'DÃ©jÃ  un compte ?'}{' '}
+          {mode === 'login' ? 'Pas encore de compte ?' : 'Déjà un compte ?'}{' '}
           <button onClick={switchMode} className="text-indigo-600 font-semibold hover:underline">
-            {mode === 'login' ? 'CrÃ©er un compte' : 'Se connecter'}
+            {mode === 'login' ? 'Créer un compte' : 'Se connecter'}
           </button>
         </p>
 
         <div className="mt-5 pt-4 border-t border-gray-100 text-center">
           <button onClick={() => go('/')}
             className="text-xs text-gray-400 hover:text-gray-600 transition-colors">
-            â† Retour Ã  l'accueil
+            â† Retour à l'accueil
           </button>
         </div>
       </div>
@@ -1230,7 +1230,7 @@ function HomePage() {
       <div className="flex flex-col items-center px-4 pt-8 pb-16">
         <div className="text-center mb-10 anim-up">
           <h1 className="text-5xl font-extrabold text-white leading-tight mb-4">
-            Engagez votre audience<br/><span className="text-yellow-300">en temps rÃ©el</span>
+            Engagez votre audience<br/><span className="text-yellow-300">en temps réel</span>
           </h1>
           <p className="text-indigo-200 text-lg max-w-lg mx-auto">Sondages, nuages de mots, quiz â€” en quelques secondes.</p>
         </div>
@@ -1238,14 +1238,14 @@ function HomePage() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5 w-full max-w-xl anim-in">
             <button onClick={()=>go('/login')} className="lift bg-white rounded-2xl p-7 text-left shadow-lg">
               <div className="w-12 h-12 bg-indigo-100 rounded-2xl flex items-center justify-center mb-4 text-2xl">ðŸŽ¯</div>
-              <h2 className="text-lg font-bold text-gray-900 mb-1">CrÃ©er un Ã©vÃ©nement</h2>
-              <p className="text-gray-500 text-sm mb-4">Enseignant â€” connectez-vous pour crÃ©er et piloter vos questions.</p>
+              <h2 className="text-lg font-bold text-gray-900 mb-1">Créer un événement</h2>
+              <p className="text-gray-500 text-sm mb-4">Enseignant â€” connectez-vous pour créer et piloter vos questions.</p>
               <span className="flex items-center gap-1 text-indigo-600 font-semibold text-sm">Se connecter <Ico.Chevron/></span>
             </button>
             <button onClick={()=>setPanel('join')} className="lift bg-white rounded-2xl p-7 text-left shadow-lg">
               <div className="w-12 h-12 bg-violet-100 rounded-2xl flex items-center justify-center mb-4 text-2xl">ðŸ™‹</div>
-              <h2 className="text-lg font-bold text-gray-900 mb-1">Rejoindre un Ã©vÃ©nement</h2>
-              <p className="text-gray-500 text-sm mb-4">Participant â€” entrez le code affichÃ©.</p>
+              <h2 className="text-lg font-bold text-gray-900 mb-1">Rejoindre un événement</h2>
+              <p className="text-gray-500 text-sm mb-4">Participant â€” entrez le code affiché.</p>
               <span className="flex items-center gap-1 text-violet-600 font-semibold text-sm">Rejoindre <Ico.Chevron/></span>
             </button>
           </div>
@@ -1253,18 +1253,18 @@ function HomePage() {
         {panel==='create' && (
           <div className="bg-white rounded-2xl p-8 w-full max-w-sm shadow-2xl anim-in">
             <button onClick={()=>setPanel(null)} className="flex items-center gap-1 text-gray-400 hover:text-gray-700 text-sm mb-5"><Ico.Back/> Retour</button>
-            <h2 className="text-xl font-bold text-gray-900 mb-5">CrÃ©er un Ã©vÃ©nement</h2>
-            <input value={title} onChange={e=>setTitle(e.target.value)} placeholder="Nom de l'Ã©vÃ©nement"
+            <h2 className="text-xl font-bold text-gray-900 mb-5">Créer un événement</h2>
+            <input value={title} onChange={e=>setTitle(e.target.value)} placeholder="Nom de l'événement"
               className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-indigo-400 text-gray-900 mb-4"
               onKeyDown={e=>e.key==='Enter'&&doCreate()} autoFocus/>
-            <button onClick={doCreate} className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl transition-colors">CrÃ©er â†’</button>
+            <button onClick={doCreate} className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl transition-colors">Créer â†’</button>
           </div>
         )}
         {panel==='join' && (
           <div className="bg-white rounded-2xl p-8 w-full max-w-sm shadow-2xl anim-in">
             <button onClick={()=>{setPanel(null);setErr('');}} className="flex items-center gap-1 text-gray-400 hover:text-gray-700 text-sm mb-5"><Ico.Back/> Retour</button>
             <h2 className="text-xl font-bold text-gray-900 mb-1">Rejoindre</h2>
-            <p className="text-gray-500 text-sm mb-5">Entrez le code affichÃ© par le prÃ©sentateur.</p>
+            <p className="text-gray-500 text-sm mb-5">Entrez le code affiché par le présentateur.</p>
             <input value={code} onChange={e=>{setCode(e.target.value.toUpperCase());setErr('');}}
               placeholder="ABC123" maxLength={6}
               className="w-full px-4 py-4 rounded-2xl border-2 border-gray-200 focus:border-violet-400 text-center font-black text-3xl tracking-widest text-gray-900 mb-2"
@@ -1295,7 +1295,7 @@ function App() {
     </div>
   );
 
-  /* â”€â”€ MODE LTI (lancÃ© depuis Moodle) â”€â”€ */
+  /* â”€â”€ MODE LTI (lancé depuis Moodle) â”€â”€ */
   if (user) {
     if (user.role === 'instructor') return <LTIPresenter user={user}/>;
     return <LTIParticipant user={user}/>;
