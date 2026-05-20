@@ -334,7 +334,7 @@ function LTIBanner({ user }) {
     <div className="bg-white border-b border-gray-100 px-4 py-2 flex items-center gap-3 text-sm">
       <div className="flex items-center gap-1.5 text-gray-500"><Ico.User/> <span className="font-semibold text-gray-800">{user.name}</span></div>
       <span className={"px-2 py-0.5 rounded-full text-xs font-semibold " + roleColor}>{roleLabel}</span>
-      {user.courseName && user.source !== 'web' && <span className="text-gray-400">Â· {user.courseName}</span>}
+      {user.courseName && user.source !== 'web' && <span className="text-gray-400">· {user.courseName}</span>}
       {user.source === 'web' && (
         <button onClick={logout} className="ml-auto flex items-center gap-1.5 text-gray-400 hover:text-red-500 transition-colors text-xs font-medium">
           <Ico.Logout/> Déconnexion
@@ -563,7 +563,7 @@ function MCQResults({ q, answers }) {
 function WordCloudResults({ answers }) {
   const words = useMemo(() => {
     const m = {};
-    answers.forEach(a => String(a.v).toLowerCase().trim().split(/\s+/).forEach(w => { if(w.length>1) m[w]=(m[w]||0)+1; }));
+    answers.forEach(a => String(a.v).toLowerCase().trim().split(/\s+/).forEach(w => { if(w.length>0) m[w]=(m[w]||0)+1; }));
     return Object.entries(m).sort((a,b)=>b[1]-a[1]).slice(0,50);
   }, [answers]);
   const max = Math.max(...words.map(([,c])=>c),1);
@@ -601,7 +601,7 @@ function RatingResults({ q, answers }) {
         <span className="text-5xl font-black text-amber-500">{avg.toFixed(1)}</span>
         <div>
           <div className="flex gap-0.5 mb-0.5">{Array.from({length:q.maxStars},(_,i)=><Ico.Star key={i} on={i<Math.round(avg)} s={18}/>)}</div>
-          <p className="text-xs text-gray-400">{answers.length} réponse{answers.length!==1?'s':''} Â· sur {q.maxStars}</p>
+          <p className="text-xs text-gray-400">{answers.length} réponse{answers.length!==1?'s':''} · sur {q.maxStars}</p>
         </div>
       </div>
       <div className="space-y-1.5">
