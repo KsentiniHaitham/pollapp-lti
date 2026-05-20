@@ -1,9 +1,29 @@
 'use strict';
 require('dotenv').config({ path: require('path').join(__dirname, '../.env') });
 
-const path    = require('path');
-const express = require('express');
+const path      = require('path');
+const express   = require('express');
+const mongoose  = require('mongoose');
+const bcrypt    = require('bcryptjs');
+const jwt       = require('jsonwebtoken');
 const { Provider } = require('ltijs');
+
+/* ════════════════════════════════════════════════════════════════
+   AUTH — Modèle Teacher & connexion mongoose séparée
+════════════════════════════════════════════════════════════════ */
+const teacherConn = mongoose.createConnection(process.env.MONGODB_URI);
+const Teacher = teacherConn.model('Teacher', new mongoose.Schema({
+  name:      { type: String, required: true },
+  email:     { type: String, required: true, unique: true, lowercase: true, trim: true },
+  password:  { type: String, required: true },
+}, { timestamps: true }));
+
+const JWT_SECRET = process.env.JWT_SECRET || process.env.LTI_KEY;
+const signToken  = (teacher) => jwt.sign(
+  { id: teacher._id.toString(), name: teacher.name, email: teacher.email, role: 'instructor' },
+  JWT_SECRET,
+  { expiresIn: '30d' }
+);
 
 /* ════════════════════════════════════════════════════════════════
    1.  LTIJS — configuration
@@ -65,6 +85,60 @@ Provider.onConnect(async (token, _req, res) => {
 ════════════════════════════════════════════════════════════════ */
 const api = express.Router();
 api.use(express.json());
+
+/* ── POST /api/auth/register ───────────────────────────────────
+   Inscription enseignant (accès web sans LTI).
+────────────────────────────────────────────────────────────── */
+api.post('/auth/register', async (req, res) => {
+  const { name, email, password } = req.body;
+  if (!name || !email || !password)
+    return res.status(400).json({ error: 'Nom, email et mot de passe obligatoires.' });
+  if (password.length < 8)
+    return res.status(400).json({ error: 'Mot de passe trop court (8 caractères minimum).' });
+  try {
+    if (await Teacher.findOne({ email: email.toLowerCase() }))
+      return res.status(409).json({ error: 'Cet email est déjà utilisé.' });
+    const hash    = await bcrypt.hash(password, 12);
+    const teacher = await Teacher.create({ name, email, password: hash });
+    return res.json({ token: signToken(teacher), user: { id: teacher._id, name: teacher.name, email: teacher.email, role: 'instructor' } });
+  } catch (err) {
+    console.error('[POST /api/auth/register]', err.message);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+/* ── POST /api/auth/login ──────────────────────────────────────
+   Connexion enseignant.
+────────────────────────────────────────────────────────────── */
+api.post('/auth/login', async (req, res) => {
+  const { email, password } = req.body;
+  if (!email || !password)
+    return res.status(400).json({ error: 'Email et mot de passe obligatoires.' });
+  try {
+    const teacher = await Teacher.findOne({ email: email.toLowerCase() });
+    if (!teacher || !(await bcrypt.compare(password, teacher.password)))
+      return res.status(401).json({ error: 'Email ou mot de passe incorrect.' });
+    return res.json({ token: signToken(teacher), user: { id: teacher._id, name: teacher.name, email: teacher.email, role: 'instructor' } });
+  } catch (err) {
+    console.error('[POST /api/auth/login]', err.message);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+/* ── GET /api/auth/me ──────────────────────────────────────────
+   Vérifie le token JWT et retourne l'enseignant.
+────────────────────────────────────────────────────────────── */
+api.get('/auth/me', (req, res) => {
+  const auth = req.headers.authorization;
+  if (!auth?.startsWith('Bearer '))
+    return res.status(401).json({ error: 'Token manquant.' });
+  try {
+    const payload = jwt.verify(auth.slice(7), JWT_SECRET);
+    return res.json({ id: payload.id, name: payload.name, email: payload.email, role: 'instructor' });
+  } catch {
+    return res.status(401).json({ error: 'Token invalide ou expiré.' });
+  }
+});
 
 /* ── POST /api/platform ────────────────────────────────────────
    Enregistre une plateforme Moodle.

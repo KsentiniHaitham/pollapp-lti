@@ -148,16 +148,17 @@ function useLiveCourseEvent(courseId) {
   return code;
 }
 
-/* ── LTI HOOK ───────────────────────────────────────────────── */
-/* Après un launch LTI, le serveur redirige vers /?lti=1&role=...
-   Le frontend lit ces params, les stocke en sessionStorage,
-   puis nettoie l'URL.                                          */
+/* ── AUTH HOOK ──────────────────────────────────────────────── */
+/* Gère l'identité de l'utilisateur dans les 3 cas :
+   - Juste après un launch LTI (params URL)
+   - Navigation interne LTI (sessionStorage)
+   - Connexion web enseignant (localStorage JWT)              */
 function useLTIUser() {
   const [user,    setUser]    = useState(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // 1. Vérifier les paramètres URL (juste après un launch LTI)
+    // 1. Params URL → launch LTI entrant
     const params = new URLSearchParams(location.search);
     if (params.get('lti') === '1') {
       const u = {
@@ -167,20 +168,35 @@ function useLTIUser() {
         role:       params.get('role')       || 'learner',
         courseId:   params.get('courseId')   || null,
         courseName: params.get('courseName') || 'Cours',
+        source:     'lti',
       };
       sessionStorage.setItem('pollapp_lti', JSON.stringify(u));
       setUser(u);
-      // Nettoyer l'URL (retirer les params sensibles)
       history.replaceState({}, '', '/');
+      setLoading(false);
       return;
     }
 
-    // 2. Vérifier sessionStorage (navigation interne après le launch)
+    // 2. sessionStorage → navigation interne après un launch LTI
     const stored = sessionStorage.getItem('pollapp_lti');
     if (stored) {
-      try { setUser(JSON.parse(stored)); } catch (_) {}
+      try { setUser({ ...JSON.parse(stored), source: 'lti' }); } catch (_) {}
+      setLoading(false);
+      return;
     }
-    // Si rien → mode standalone (pas de LTI)
+
+    // 3. localStorage JWT → connexion web enseignant
+    const token = localStorage.getItem('pollapp_web_token');
+    if (token) {
+      fetch('/api/auth/me', { headers: { Authorization: 'Bearer ' + token } })
+        .then(r => r.ok ? r.json() : Promise.reject())
+        .then(u => setUser({ ...u, source: 'web', courseId: 'web_' + u.id, courseName: 'Mes événements' }))
+        .catch(() => localStorage.removeItem('pollapp_web_token'))
+        .finally(() => setLoading(false));
+      return;
+    }
+
+    setLoading(false);
   }, []);
 
   return { user, loading };
@@ -299,11 +315,21 @@ function QRModal({ url, code, onClose }) {
 function LTIBanner({ user }) {
   const roleLabel = user.role === 'instructor' ? 'Enseignant' : 'Étudiant';
   const roleColor = user.role === 'instructor' ? 'bg-indigo-100 text-indigo-700' : 'bg-emerald-100 text-emerald-700';
+  const logout = () => {
+    localStorage.removeItem('pollapp_web_token');
+    sessionStorage.removeItem('pollapp_lti');
+    location.href = '/';
+  };
   return (
     <div className="bg-white border-b border-gray-100 px-4 py-2 flex items-center gap-3 text-sm">
       <div className="flex items-center gap-1.5 text-gray-500"><Ico.User/> <span className="font-semibold text-gray-800">{user.name}</span></div>
       <span className={"px-2 py-0.5 rounded-full text-xs font-semibold " + roleColor}>{roleLabel}</span>
-      {user.courseName && <span className="text-gray-400">· {user.courseName}</span>}
+      {user.courseName && user.source !== 'web' && <span className="text-gray-400">· {user.courseName}</span>}
+      {user.source === 'web' && (
+        <button onClick={logout} className="ml-auto flex items-center gap-1.5 text-gray-400 hover:text-red-500 transition-colors text-xs font-medium">
+          <Ico.Logout/> Déconnexion
+        </button>
+      )}
     </div>
   );
 }
@@ -1073,6 +1099,92 @@ function ParticipantPage({ initCode, ltiUser, hideBranding }) {
 }
 
 /* ══════════════════════════════════════════════════════════════
+   PAGE LOGIN / INSCRIPTION (accès web enseignant)
+══════════════════════════════════════════════════════════════ */
+function LoginPage() {
+  const [mode, setMode] = useState('login');
+  const [form, setForm] = useState({ name: '', email: '', password: '' });
+  const [err,  setErr]  = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const set = k => e => setForm(f => ({ ...f, [k]: e.target.value }));
+
+  const submit = async () => {
+    setErr(''); setBusy(true);
+    const url  = mode === 'login' ? '/api/auth/login' : '/api/auth/register';
+    const body = mode === 'login'
+      ? { email: form.email, password: form.password }
+      : { name: form.name, email: form.email, password: form.password };
+    try {
+      const r    = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      const data = await r.json();
+      if (!r.ok) { setErr(data.error || 'Erreur inconnue.'); return; }
+      localStorage.setItem('pollapp_web_token', data.token);
+      location.href = '/';
+    } catch {
+      setErr('Erreur réseau, réessayez.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const switchMode = () => { setMode(m => m === 'login' ? 'register' : 'login'); setErr(''); };
+
+  return (
+    <div className="min-h-screen flex items-center justify-center p-4"
+      style={{background:'linear-gradient(135deg,#4f46e5 0%,#7c3aed 55%,#2563eb 100%)'}}>
+      <div className="bg-white rounded-2xl p-8 w-full max-w-sm shadow-2xl anim-in">
+        <div className="text-center mb-6">
+          <div className="w-12 h-12 bg-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-3 shadow-lg">
+            <span className="text-white font-black text-2xl">P</span>
+          </div>
+          <h1 className="text-2xl font-extrabold text-gray-900">
+            {mode === 'login' ? 'Connexion' : 'Créer un compte'}
+          </h1>
+          <p className="text-gray-400 text-sm mt-1">Espace enseignant</p>
+        </div>
+
+        <div className="space-y-3">
+          {mode === 'register' && (
+            <input value={form.name} onChange={set('name')} placeholder="Nom complet" autoFocus
+              className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-indigo-300 text-gray-900 text-sm"
+              onKeyDown={e => e.key === 'Enter' && submit()}/>
+          )}
+          <input value={form.email} onChange={set('email')} placeholder="Email" type="email"
+            autoFocus={mode === 'login'}
+            className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-indigo-300 text-gray-900 text-sm"
+            onKeyDown={e => e.key === 'Enter' && submit()}/>
+          <input value={form.password} onChange={set('password')} placeholder="Mot de passe" type="password"
+            className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-indigo-300 text-gray-900 text-sm"
+            onKeyDown={e => e.key === 'Enter' && submit()}/>
+        </div>
+
+        {err && <p className="text-red-500 text-sm mt-3 bg-red-50 px-3 py-2 rounded-lg">{err}</p>}
+
+        <button onClick={submit} disabled={busy}
+          className="w-full mt-5 py-3 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-bold rounded-xl transition-colors text-sm">
+          {busy ? 'Chargement…' : mode === 'login' ? 'Se connecter →' : 'Créer mon compte →'}
+        </button>
+
+        <p className="text-center text-sm text-gray-400 mt-4">
+          {mode === 'login' ? 'Pas encore de compte ?' : 'Déjà un compte ?'}{' '}
+          <button onClick={switchMode} className="text-indigo-600 font-semibold hover:underline">
+            {mode === 'login' ? 'Créer un compte' : 'Se connecter'}
+          </button>
+        </p>
+
+        <div className="mt-5 pt-4 border-t border-gray-100 text-center">
+          <button onClick={() => go('/')}
+            className="text-xs text-gray-400 hover:text-gray-600 transition-colors">
+            ← Retour à l'accueil
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════════════════════
    HOME PAGE (mode standalone — sans LTI)
 ══════════════════════════════════════════════════════════════ */
 function HomePage() {
@@ -1109,11 +1221,11 @@ function HomePage() {
         </div>
         {!panel && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5 w-full max-w-xl anim-in">
-            <button onClick={()=>setPanel('create')} className="lift bg-white rounded-2xl p-7 text-left shadow-lg">
+            <button onClick={()=>go('/login')} className="lift bg-white rounded-2xl p-7 text-left shadow-lg">
               <div className="w-12 h-12 bg-indigo-100 rounded-2xl flex items-center justify-center mb-4 text-2xl">🎯</div>
               <h2 className="text-lg font-bold text-gray-900 mb-1">Créer un événement</h2>
-              <p className="text-gray-500 text-sm mb-4">Présentateur — créez et pilotez vos questions.</p>
-              <span className="flex items-center gap-1 text-indigo-600 font-semibold text-sm">Commencer <Ico.Chevron/></span>
+              <p className="text-gray-500 text-sm mb-4">Enseignant — connectez-vous pour créer et piloter vos questions.</p>
+              <span className="flex items-center gap-1 text-indigo-600 font-semibold text-sm">Se connecter <Ico.Chevron/></span>
             </button>
             <button onClick={()=>setPanel('join')} className="lift bg-white rounded-2xl p-7 text-left shadow-lg">
               <div className="w-12 h-12 bg-violet-100 rounded-2xl flex items-center justify-center mb-4 text-2xl">🙋</div>
@@ -1175,6 +1287,7 @@ function App() {
   }
 
   /* ── MODE STANDALONE ── */
+  if (route.page === 'login')   return <LoginPage/>;
   if (route.page === 'present') return <PresenterPage code={route.code}/>;
   if (route.page === 'join')    return <ParticipantPage initCode={route.code}/>;
   return <HomePage/>;
