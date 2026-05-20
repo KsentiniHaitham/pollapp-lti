@@ -81,9 +81,16 @@ Provider.onConnect(async (token, _req, res) => {
 });
 
 /* ════════════════════════════════════════════════════════════════
-   2b. Accès direct (navigateur sans token LTI) → servir le SPA
-   Permet aux enseignants d'accéder à l'app via le web sans Moodle.
+   2b. Routes non protégées par LTI
+   - /api/* → nos endpoints REST (auth, platform, health)
+   - /static/* → assets du frontend
+   Sans whitelist, ltijs intercepte tout et renvoie 401.
 ════════════════════════════════════════════════════════════════ */
+Provider.whitelist(
+  { route: new RegExp('^/api/'), method: 'all' },
+);
+
+/* Accès direct navigateur sans token → servir le SPA React */
 const CLIENT = path.join(__dirname, '../../client');
 Provider.onInvalidToken((_req, res) => {
   res.sendFile(path.join(CLIENT, 'index.html'));
@@ -203,7 +210,14 @@ Provider.app.use('/api', api);
 
 /* ════════════════════════════════════════════════════════════════
    4.  FRONTEND STATIQUE (assets JS/CSS/images)
+   Supprime le header COEP posé par helmet/ltijs qui bloque les
+   ressources CDN (Tailwind, React, Firebase…).
 ════════════════════════════════════════════════════════════════ */
+Provider.app.use((_req, res, next) => {
+  res.removeHeader('Cross-Origin-Embedder-Policy');
+  res.removeHeader('Cross-Origin-Opener-Policy');
+  next();
+});
 Provider.app.use(express.static(CLIENT));
 
 /* ════════════════════════════════════════════════════════════════
