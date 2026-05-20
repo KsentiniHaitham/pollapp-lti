@@ -677,9 +677,9 @@ function PresenterPage({ code, ltiUser, onNewSession }) {
     setCopied(true); setTimeout(()=>setCopied(false),2000);
   };
 
-  const selQ       = ev.questions.find(q => q.id===selId) || null;
+  const selQ       = (ev.questions || []).find(q => q.id===selId) || null;
   const selAnswers = selQ
-    ? (Array.isArray(ev.answers[selId]) ? ev.answers[selId] : Object.values(ev.answers[selId]||{}))
+    ? (Array.isArray((ev.answers||{})[selId]) ? ev.answers[selId] : Object.values((ev.answers||{})[selId]||{}))
     : [];
   const isLive  = ev.launched && ev.activeQId===selId;
   const joinUrl = baseUrl() + '#/join/' + ev.code;
@@ -736,16 +736,16 @@ function PresenterPage({ code, ltiUser, onNewSession }) {
             </div>
           </div>
           <div className="flex-1 overflow-y-auto p-3">
-            {ev.questions.length === 0 && (
+            {(ev.questions || []).length === 0 && (
               <div className="text-center py-8">
                 <p className="text-gray-300 text-3xl mb-2">📋</p>
                 <p className="text-gray-400 text-sm">Aucune question.</p>
               </div>
             )}
-            {ev.questions.map((q,i) => {
+            {(ev.questions || []).map((q,i) => {
               const cfg  = T[q.type];
               const live = ev.activeQId===q.id && ev.launched;
-              const cnt  = Array.isArray(ev.answers[q.id]) ? ev.answers[q.id].length : Object.keys(ev.answers[q.id]||{}).length;
+              const cnt  = Array.isArray((ev.answers||{})[q.id]) ? ev.answers[q.id].length : Object.keys((ev.answers||{})[q.id]||{}).length;
               const sel  = selId===q.id;
               return (
                 <div key={q.id} onClick={()=>{setSelId(q.id);setEditor(null);}}
@@ -1038,9 +1038,9 @@ function ParticipantPage({ initCode, ltiUser, hideBranding }) {
     </div>
   );
 
-  const curQ     = ev.activeQId ? ev.questions.find(q => q.id===ev.activeQId) : null;
+  const curQ     = ev.activeQId ? (ev.questions || []).find(q => q.id===ev.activeQId) : null;
   const isActive = ev.launched && !!curQ;
-  const existingAnswers = curQ ? (Array.isArray(ev.answers[ev.activeQId]) ? ev.answers[ev.activeQId] : Object.values(ev.answers[ev.activeQId]||{})) : [];
+  const existingAnswers = curQ ? (Array.isArray((ev.answers||{})[ev.activeQId]) ? ev.answers[ev.activeQId] : Object.values((ev.answers||{})[ev.activeQId]||{})) : [];
   const answered = !!(ev.activeQId && existingAnswers.some(a => a.pid===pid));
   const cfg      = curQ ? T[curQ.type] : null;
 
