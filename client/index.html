@@ -361,7 +361,7 @@ function LTIPresenter({ user }) {
   // Chargement initial
   if (courseEventCode === undefined) return (
     <div className="min-h-screen flex items-center justify-center">
-      <p className="text-gray-400">Chargement du coursâ€¦</p>
+      <p className="text-gray-400">Chargement du cours…</p>
     </div>
   );
 
@@ -421,7 +421,7 @@ function LTIParticipant({ user }) {
 
   if (courseEventCode === undefined) return (
     <div className="min-h-screen flex items-center justify-center">
-      <p className="text-gray-400">Connexion en coursâ€¦</p>
+      <p className="text-gray-400">Connexion en cours…</p>
     </div>
   );
 
@@ -431,7 +431,7 @@ function LTIParticipant({ user }) {
       <div className="flex items-center justify-center h-[80vh]">
         <div className="text-center anim-up">
           <div className="w-24 h-24 rounded-3xl bg-indigo-100 flex items-center justify-center mx-auto mb-5 text-5xl float">⏳</div>
-          <h2 className="text-2xl font-bold text-gray-800 mb-2">En attente du professeurâ€¦</h2>
+          <h2 className="text-2xl font-bold text-gray-800 mb-2">En attente du professeur…</h2>
           <p className="text-gray-500 text-sm">Le sondage démarrera automatiquement.</p>
         </div>
       </div>
@@ -512,7 +512,7 @@ function QuestionEditor({ initial, onSave, onCancel }) {
       </div>
       <label className="block text-sm font-medium text-gray-700 mb-1.5">Question *</label>
       <textarea value={q.text} onChange={e => setQ({...q, text:e.target.value})}
-        placeholder="Tapez votre question iciâ€¦" rows={2}
+        placeholder="Tapez votre question ici…" rows={2}
         className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-indigo-300 text-gray-900 resize-none mb-4" autoFocus/>
       {q.type === 'mcq'       && <MCQForm q={q} onChange={setQ}/>}
       {q.type === 'rating'    && <RatingForm q={q} onChange={setQ}/>}
@@ -568,7 +568,7 @@ function WordCloudResults({ answers }) {
   }, [answers]);
   const max = Math.max(...words.map(([,c])=>c),1);
   const WC  = ['text-indigo-600','text-violet-600','text-sky-500','text-emerald-500','text-rose-500','text-amber-500','text-pink-500','text-teal-500'];
-  if (!words.length) return <p className="text-gray-400 text-sm italic">En attenteâ€¦</p>;
+  if (!words.length) return <p className="text-gray-400 text-sm italic">En attente…</p>;
   return (
     <div className="flex flex-wrap gap-x-3 gap-y-1 items-baseline py-2 min-h-20">
       {words.map(([w,c],i) => (
@@ -580,7 +580,7 @@ function WordCloudResults({ answers }) {
 }
 
 function OpenResults({ answers }) {
-  if (!answers.length) return <p className="text-gray-400 text-sm italic">En attenteâ€¦</p>;
+  if (!answers.length) return <p className="text-gray-400 text-sm italic">En attente…</p>;
   return (
     <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
       {[...answers].reverse().map((a,i) => (
@@ -653,7 +653,7 @@ function PresenterPage({ code, ltiUser, onNewSession }) {
 
   if (!ev) return (
     <div className="h-full flex items-center justify-center p-8">
-      <p className="text-gray-400">Chargement de l'événementâ€¦</p>
+      <p className="text-gray-400">Chargement de l'événement…</p>
     </div>
   );
 
@@ -766,7 +766,7 @@ function PresenterPage({ code, ltiUser, onNewSession }) {
                     <p className="text-xs text-gray-400">Q{i+1}</p>
                     <p className="text-sm text-gray-700 font-semibold truncate">{q.text||'(sans titre)'}</p>
                     <div className="flex items-center gap-2 mt-0.5">
-                      {live && <span className="text-xs text-green-600 font-bold live-dot">â— En direct</span>}
+                      {live && <span className="text-xs text-green-600 font-bold live-dot">● En direct</span>}
                       {cnt>0 && <span className="text-xs text-gray-400">{cnt} rép.</span>}
                     </div>
                   </div>
@@ -903,7 +903,7 @@ function WordCloudAnswer({ onSubmit }) {
   const ok = val.trim().length > 0;
   return (
     <div>
-      <input value={val} onChange={e=>setVal(e.target.value)} placeholder="Un mot ou une expressionâ€¦"
+      <input value={val} onChange={e=>setVal(e.target.value)} placeholder="Un mot ou une expression…"
         maxLength={30} className="w-full px-5 py-4 text-xl text-center rounded-2xl border-2 border-gray-200 focus:border-sky-400 text-gray-900 font-semibold mb-4"
         onKeyDown={e=>e.key==='Enter'&&ok&&onSubmit(val.trim())} autoFocus/>
       <button onClick={()=>ok&&onSubmit(val.trim())} disabled={!ok}
@@ -919,7 +919,7 @@ function OpenAnswer({ onSubmit }) {
   const ok = val.trim().length > 0;
   return (
     <div>
-      <textarea value={val} onChange={e=>setVal(e.target.value)} placeholder="Tapez votre réponseâ€¦"
+      <textarea value={val} onChange={e=>setVal(e.target.value)} placeholder="Tapez votre réponse…"
         rows={4} maxLength={500} className="w-full px-4 py-3 rounded-2xl border-2 border-gray-200 focus:border-emerald-400 text-gray-800 resize-none text-base mb-1" autoFocus/>
       <p className="text-xs text-gray-400 text-right mb-3">{val.length}/500</p>
       <button onClick={()=>ok&&onSubmit(val.trim())} disabled={!ok}
@@ -1038,7 +1038,7 @@ function ParticipantPage({ initCode, ltiUser, hideBranding }) {
         ) : (
           <>
             <div className="text-5xl mb-4 live-dot" style={{display:'inline-block'}}>⏳</div>
-            <h2 className="text-xl font-bold text-gray-900 mb-2">Connexionâ€¦</h2>
+            <h2 className="text-xl font-bold text-gray-900 mb-2">Connexion…</h2>
             <p className="text-gray-400 text-sm">{code}</p>
           </>
         )}
@@ -1075,7 +1075,7 @@ function ParticipantPage({ initCode, ltiUser, hideBranding }) {
           {!isActive && (
             <div className="text-center py-16 anim-up">
               <div className="w-24 h-24 rounded-3xl bg-indigo-100 flex items-center justify-center mx-auto mb-6 text-5xl float">⏳</div>
-              <h2 className="text-2xl font-bold text-gray-800 mb-2">En attenteâ€¦</h2>
+              <h2 className="text-2xl font-bold text-gray-800 mb-2">En attente…</h2>
               <p className="text-gray-500">Le présentateur n'a pas encore lancé de question.</p>
             </div>
           )}
@@ -1089,7 +1089,7 @@ function ParticipantPage({ initCode, ltiUser, hideBranding }) {
                 <div className="bg-white rounded-2xl border-2 border-green-200 p-8 text-center anim-in">
                   <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-3"><Ico.Check s={30}/></div>
                   <h3 className="text-xl font-bold text-green-700 mb-1">Réponse envoyée !</h3>
-                  <p className="text-gray-400 text-sm">En attente des résultatsâ€¦</p>
+                  <p className="text-gray-400 text-sm">En attente des résultats…</p>
                 </div>
               ) : (
                 <div className="bg-white rounded-2xl p-5 border border-gray-100">
@@ -1172,7 +1172,7 @@ function LoginPage() {
 
         <button onClick={submit} disabled={busy}
           className="w-full mt-5 py-3 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-bold rounded-xl transition-colors text-sm">
-          {busy ? 'Chargementâ€¦' : mode === 'login' ? 'Se connecter â†’' : 'Créer mon compte â†’'}
+          {busy ? 'Chargement…' : mode === 'login' ? 'Se connecter â†’' : 'Créer mon compte â†’'}
         </button>
 
         <p className="text-center text-sm text-gray-400 mt-4">
@@ -1288,7 +1288,7 @@ function App() {
     <div className="min-h-screen flex items-center justify-center bg-slate-50">
       <div className="text-center">
         <div className="w-12 h-12 bg-indigo-100 rounded-2xl flex items-center justify-center mx-auto mb-3 text-2xl">P</div>
-        <p className="text-gray-400 text-sm">Chargementâ€¦</p>
+        <p className="text-gray-400 text-sm">Chargement…</p>
       </div>
     </div>
   );
