@@ -1,0 +1,1161 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PollApp</title>
+  <!-- React -->
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <!-- Tailwind -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Firebase compat -->
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+  <!-- QR code -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <style>
+    * { font-family: 'Inter', system-ui, sans-serif; }
+    body { margin: 0; background: #f8fafc; }
+    @keyframes fadeInUp  { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:translateY(0)} }
+    @keyframes scaleIn   { from{opacity:0;transform:scale(.95)}       to{opacity:1;transform:scale(1)} }
+    @keyframes pulseDot  { 0%,100%{opacity:1} 50%{opacity:.3} }
+    @keyframes floatUp   { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-8px)} }
+    .anim-up  { animation: fadeInUp .35s ease-out both; }
+    .anim-in  { animation: scaleIn  .28s ease-out both; }
+    .live-dot { animation: pulseDot 1.6s ease-in-out infinite; }
+    .float    { animation: floatUp  2s   ease-in-out infinite; }
+    .bar      { transition: width .7s cubic-bezier(.4,0,.2,1); }
+    .lift     { transition: transform .18s ease, box-shadow .18s ease; }
+    .lift:hover { transform: translateY(-3px); box-shadow: 0 20px 48px rgba(0,0,0,.12); }
+    .star     { transition: transform .12s; cursor: pointer; }
+    .star:hover { transform: scale(1.22); }
+    .word     { transition: transform .2s; display: inline-block; }
+    .word:hover { transform: scale(1.1); }
+    ::-webkit-scrollbar { width: 5px; }
+    ::-webkit-scrollbar-track { background: #f1f5f9; }
+    ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+    input:focus, textarea:focus { outline: none; }
+  </style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel">
+const { useState, useEffect, useMemo, useRef } = React;
+
+/* ══════════════════════════════════════════════════════════════
+   🔧  CONFIGURATION FIREBASE
+   ──────────────────────────────────────────────────────────────
+   1. Créer un projet sur https://console.firebase.google.com
+   2. Ajouter une app Web → copier la config
+   3. Activer "Realtime Database" → Règles :
+      { "rules": { ".read": true, ".write": true } }
+   4. Remplacer les valeurs ci-dessous
+══════════════════════════════════════════════════════════════ */
+const FIREBASE_CONFIG = {
+  apiKey:            "AIzaSyBWxa_dEg5g7Qsa66v0DviBrLdsSrTuumo",
+  authDomain:        "pollapp-11230.firebaseapp.com",
+  databaseURL:       "https://pollapp-11230-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId:         "pollapp-11230",
+  storageBucket:     "pollapp-11230.firebasestorage.app",
+  messagingSenderId: "158416477339",
+  appId:             "1:158416477339:web:da16baf35007f3c829fa3e",
+};
+
+const FB_READY = !FIREBASE_CONFIG.apiKey.includes('VOTRE');
+if (FB_READY) {
+  firebase.initializeApp(FIREBASE_CONFIG);
+}
+const fireDb = FB_READY ? firebase.database() : null;
+
+/* ── UTILS ─────────────────────────────────────────────────── */
+const genCode = () => {
+  const c = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  return Array.from({length:6}, () => c[Math.floor(Math.random()*c.length)]).join('');
+};
+const genId   = () => '_' + Math.random().toString(36).substr(2,9);
+const baseUrl = () => location.href.split('#')[0];
+
+/* ── FIREBASE STORAGE ───────────────────────────────────────── */
+const evRef     = (code)     => fireDb.ref('events/' + code.toUpperCase());
+const courseRef = (courseId) => fireDb.ref('courses/' + courseId.replace(/[.#$[\]]/g, '_'));
+
+const dbSave  = (ev)       => evRef(ev.code).set(ev);
+const dbPatch = (code, fn) => evRef(code).transaction(data => data ? fn(data) : undefined);
+
+/* ── FACTORIES ──────────────────────────────────────────────── */
+const makeEvent = (title, courseId) => ({
+  code:       genCode(),
+  title:      title.trim() || 'Nouveau sondage',
+  courseId:   courseId || null,
+  questions:  [],
+  activeQId:  null,
+  launched:   false,
+  answers:    {},
+});
+
+const makeQ = (type) => ({
+  id:       genId(),
+  type,
+  text:     '',
+  options:  type === 'mcq' ? ['','','',''] : [],
+  multi:    false,
+  maxStars: 5,
+});
+
+/* ── ROUTER ─────────────────────────────────────────────────── */
+const parseHash = () => {
+  const parts = (location.hash.replace('#','') || '/').split('/').filter(Boolean);
+  return { page: parts[0] || 'home', code: parts[1] };
+};
+const go = (path) => { location.hash = path; };
+
+function useRoute() {
+  const [r, setR] = useState(parseHash);
+  useEffect(() => {
+    const h = () => setR(parseHash());
+    window.addEventListener('hashchange', h);
+    return () => window.removeEventListener('hashchange', h);
+  }, []);
+  return r;
+}
+
+/* ── LIVE HOOKS ─────────────────────────────────────────────── */
+function useLive(code) {
+  const [ev, setEv] = useState(null);
+  useEffect(() => {
+    if (!code || !fireDb) return;
+    const ref = evRef(code);
+    const cb  = snap => setEv(snap.val());
+    ref.on('value', cb);
+    return () => ref.off('value', cb);
+  }, [code]);
+  return ev;
+}
+
+function useLiveCourseEvent(courseId) {
+  const [code, setCode] = useState(undefined); // undefined = chargement
+  useEffect(() => {
+    if (!courseId || !fireDb) { setCode(null); return; }
+    const ref = courseRef(courseId).child('currentEventCode');
+    const cb  = snap => setCode(snap.val() || null);
+    ref.on('value', cb);
+    return () => ref.off('value', cb);
+  }, [courseId]);
+  return code;
+}
+
+/* ── LTI HOOK ───────────────────────────────────────────────── */
+function useLTIUser() {
+  const [user,    setUser]    = useState(null);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    fetch('/api/user', { credentials: 'include' })
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { setUser(data); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, []);
+  return { user, loading };
+}
+
+/* ── TYPE CONFIG ────────────────────────────────────────────── */
+const T = {
+  mcq:       { label:'Choix multiple',   icon:'📊', bg:'bg-indigo-100', tx:'text-indigo-700', grad:'from-indigo-500 to-violet-600'  },
+  wordcloud: { label:'Nuage de mots',    icon:'☁️',  bg:'bg-sky-100',    tx:'text-sky-700',    grad:'from-sky-500 to-blue-600'       },
+  open:      { label:'Question ouverte', icon:'✍️',  bg:'bg-emerald-100',tx:'text-emerald-700',grad:'from-emerald-500 to-teal-600'   },
+  rating:    { label:'Évaluation',       icon:'⭐',  bg:'bg-amber-100',  tx:'text-amber-700',  grad:'from-amber-400 to-orange-500'   },
+};
+
+/* ── ICONS ──────────────────────────────────────────────────── */
+const Ico = {
+  Back:    () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12,19 5,12 12,5"/></svg>,
+  Plus:    () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>,
+  Play:    () => <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg>,
+  Stop:    () => <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>,
+  Trash:   () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3,6 5,6 21,6"/><path d="M19,6l-1,14a2,2,0,0,1-2,2H8a2,2,0,0,1-2-2L5,6M10,11v6M14,11v6M9,6V4a1,1,0,0,1,1-1h4a1,1,0,0,1,1,1v2"/></svg>,
+  Copy:    () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>,
+  Check:   ({s=16}) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20,6 9,17 4,12"/></svg>,
+  Edit:    () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>,
+  Chevron: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="9,18 15,12 9,6"/></svg>,
+  Star:    ({on, s=36}) => <svg width={s} height={s} viewBox="0 0 24 24" fill={on?'#F59E0B':'none'} stroke={on?'#F59E0B':'#D1D5DB'} strokeWidth="1.8"><polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26"/></svg>,
+  QR:      () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="5" y="5" width="3" height="3" fill="currentColor" stroke="none"/><rect x="16" y="5" width="3" height="3" fill="currentColor" stroke="none"/><rect x="5" y="16" width="3" height="3" fill="currentColor" stroke="none"/><path d="M14 14h3v3h-3zM17 17h3v3M17 14h3"/></svg>,
+  Logout:  () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16,17 21,12 16,7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>,
+  User:    () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>,
+};
+
+/* ══════════════════════════════════════════════════════════════
+   ÉCRAN DE CONFIGURATION FIREBASE
+   Affiché si les valeurs ne sont pas encore remplacées.
+══════════════════════════════════════════════════════════════ */
+function FirebaseSetupScreen() {
+  return (
+    <div className="min-h-screen flex items-center justify-center p-6 bg-slate-50">
+      <div className="bg-white rounded-2xl p-8 max-w-lg w-full shadow-xl border border-orange-100">
+        <div className="text-5xl mb-4">🔧</div>
+        <h1 className="text-2xl font-bold text-gray-900 mb-2">Configuration Firebase requise</h1>
+        <p className="text-gray-500 text-sm mb-6">
+          Modifie <code className="bg-gray-100 px-1 rounded">client/index.html</code> et
+          remplace les valeurs <code className="bg-gray-100 px-1 rounded">VOTRE_*</code>
+          par ta config Firebase.
+        </p>
+        <ol className="space-y-3 text-sm text-gray-700">
+          {[
+            ['1','Va sur','https://console.firebase.google.com','console.firebase.google.com'],
+            ['2','Crée un projet et ajoute une app Web','',''],
+            ['3','Active "Realtime Database" → choisir Europe (europe-west1)','',''],
+            ['4','Dans Règles, colle :','',''],
+          ].map(([n,text,url,label]) => (
+            <li key={n} className="flex gap-3">
+              <span className="w-6 h-6 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold text-xs flex-shrink-0">{n}</span>
+              <span>{text} {url && <a href={url} target="_blank" className="text-indigo-600 underline">{label}</a>}</span>
+            </li>
+          ))}
+        </ol>
+        <pre className="bg-gray-900 text-green-400 text-xs rounded-xl p-4 mt-4 overflow-x-auto">
+{`{
+  "rules": {
+    ".read": true,
+    ".write": true
+  }
+}`}
+        </pre>
+        <p className="text-xs text-gray-400 mt-4">
+          Copie ensuite la config Firebase dans le champ <code>FIREBASE_CONFIG</code> en haut de ce fichier.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════════════════════
+   QR CODE
+══════════════════════════════════════════════════════════════ */
+function QRDisplay({ url, size = 160 }) {
+  const ref = useRef(null);
+  useEffect(() => {
+    if (!ref.current || !window.QRCode) return;
+    ref.current.innerHTML = '';
+    new window.QRCode(ref.current, {
+      text: url, width: size, height: size,
+      colorDark: '#4f46e5', colorLight: '#ffffff',
+      correctLevel: window.QRCode.CorrectLevel.H,
+    });
+  }, [url, size]);
+  return <div ref={ref} style={{lineHeight:0}}/>;
+}
+
+function QRModal({ url, code, onClose }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{background:'rgba(0,0,0,.55)', backdropFilter:'blur(4px)'}}
+      onClick={onClose}>
+      <div className="bg-white rounded-3xl p-8 shadow-2xl flex flex-col items-center gap-5 anim-in max-w-xs w-full"
+        onClick={e => e.stopPropagation()}>
+        <h2 className="text-xl font-extrabold text-gray-900">Rejoindre</h2>
+        <div className="rounded-2xl border-4 border-indigo-100 p-3">
+          <QRDisplay url={url} size={220}/>
+        </div>
+        <div className="text-center">
+          <p className="text-xs text-gray-400 mb-1">ou entrer le code</p>
+          <p className="font-black text-4xl tracking-widest text-indigo-600">{code}</p>
+        </div>
+        <button onClick={onClose} className="w-full py-2.5 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-600 font-semibold text-sm transition-colors">Fermer</button>
+      </div>
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════════════════════
+   BANDEAU UTILISATEUR LTI
+══════════════════════════════════════════════════════════════ */
+function LTIBanner({ user }) {
+  const roleLabel = user.role === 'instructor' ? 'Enseignant' : 'Étudiant';
+  const roleColor = user.role === 'instructor' ? 'bg-indigo-100 text-indigo-700' : 'bg-emerald-100 text-emerald-700';
+  return (
+    <div className="bg-white border-b border-gray-100 px-4 py-2 flex items-center gap-3 text-sm">
+      <div className="flex items-center gap-1.5 text-gray-500"><Ico.User/> <span className="font-semibold text-gray-800">{user.name}</span></div>
+      <span className={"px-2 py-0.5 rounded-full text-xs font-semibold " + roleColor}>{roleLabel}</span>
+      {user.courseName && <span className="text-gray-400">· {user.courseName}</span>}
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════════════════════
+   MODE LTI — PRÉSENTATEUR (enseignant)
+══════════════════════════════════════════════════════════════ */
+function LTIPresenter({ user }) {
+  const courseEventCode = useLiveCourseEvent(user.courseId);
+  const [creating, setCreating] = useState(false);
+  const [title,    setTitle]    = useState('');
+
+  const createAndStart = async () => {
+    const ev = makeEvent(title || `Sondage — ${user.courseName}`, user.courseId);
+    await dbSave(ev);
+    await courseRef(user.courseId).child('currentEventCode').set(ev.code);
+  };
+
+  // Chargement initial
+  if (courseEventCode === undefined) return (
+    <div className="min-h-screen flex items-center justify-center">
+      <p className="text-gray-400">Chargement du cours…</p>
+    </div>
+  );
+
+  // Aucun événement actif → proposer d'en créer un
+  if (!courseEventCode || creating) return (
+    <div className="min-h-screen bg-slate-50">
+      <LTIBanner user={user}/>
+      <div className="flex items-center justify-center p-8 pt-16">
+        <div className="bg-white rounded-2xl p-8 w-full max-w-sm shadow-xl anim-in">
+          <div className="text-4xl mb-4">🎯</div>
+          <h2 className="text-xl font-bold text-gray-900 mb-1">
+            {creating ? 'Nouveau sondage' : 'Démarrer un sondage'}
+          </h2>
+          <p className="text-gray-500 text-sm mb-5">
+            {creating ? 'Nom du sondage (optionnel)' : `Aucun sondage actif pour "${user.courseName}".`}
+          </p>
+          <input value={title} onChange={e => setTitle(e.target.value)}
+            placeholder={`Sondage — ${user.courseName}`}
+            className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-indigo-300 text-gray-900 mb-4"
+            onKeyDown={e => e.key === 'Enter' && createAndStart()}
+            autoFocus/>
+          <button onClick={createAndStart}
+            className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl transition-colors">
+            Créer et démarrer →
+          </button>
+          {courseEventCode && !creating && (
+            <button onClick={() => setCreating(false)}
+              className="w-full mt-2 py-2 text-gray-400 hover:text-gray-600 text-sm transition-colors">
+              Annuler
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+
+  // Événement actif → vue présentateur complète
+  return (
+    <div className="min-h-screen bg-slate-50 flex flex-col">
+      <LTIBanner user={user}/>
+      <div className="flex-1">
+        <PresenterPage
+          code={courseEventCode}
+          ltiUser={user}
+          onNewSession={() => setCreating(true)}
+        />
+      </div>
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════════════════════
+   MODE LTI — PARTICIPANT (étudiant)
+══════════════════════════════════════════════════════════════ */
+function LTIParticipant({ user }) {
+  const courseEventCode = useLiveCourseEvent(user.courseId);
+
+  if (courseEventCode === undefined) return (
+    <div className="min-h-screen flex items-center justify-center">
+      <p className="text-gray-400">Connexion en cours…</p>
+    </div>
+  );
+
+  if (!courseEventCode) return (
+    <div className="min-h-screen bg-slate-50">
+      <LTIBanner user={user}/>
+      <div className="flex items-center justify-center h-[80vh]">
+        <div className="text-center anim-up">
+          <div className="w-24 h-24 rounded-3xl bg-indigo-100 flex items-center justify-center mx-auto mb-5 text-5xl float">⏳</div>
+          <h2 className="text-2xl font-bold text-gray-800 mb-2">En attente du professeur…</h2>
+          <p className="text-gray-500 text-sm">Le sondage démarrera automatiquement.</p>
+        </div>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="min-h-screen bg-slate-50 flex flex-col">
+      <LTIBanner user={user}/>
+      <div className="flex-1">
+        <ParticipantPage
+          initCode={courseEventCode}
+          ltiUser={user}
+          hideBranding
+        />
+      </div>
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════════════════════
+   QUESTION EDITOR
+══════════════════════════════════════════════════════════════ */
+function MCQForm({ q, onChange }) {
+  const update = (i, v) => { const o = [...q.options]; o[i] = v; onChange({...q, options:o}); };
+  const add    = ()     => onChange({...q, options:[...q.options,'']});
+  const remove = (i)    => q.options.length > 2 && onChange({...q, options:q.options.filter((_,j) => j!==i)});
+  return (
+    <div className="space-y-2.5">
+      <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer select-none">
+        <input type="checkbox" checked={q.multi} onChange={e => onChange({...q, multi:e.target.checked})} className="rounded"/>
+        Plusieurs réponses possibles
+      </label>
+      {q.options.map((opt,i) => (
+        <div key={i} className="flex items-center gap-2">
+          <div className="w-7 h-7 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-xs font-bold flex-shrink-0">{String.fromCharCode(65+i)}</div>
+          <input value={opt} onChange={e => update(i, e.target.value)}
+            placeholder={"Option " + String.fromCharCode(65+i)}
+            className="flex-1 px-3 py-2 rounded-lg border border-gray-200 focus:ring-2 focus:ring-indigo-300 text-sm text-gray-800"/>
+          {q.options.length > 2 && (
+            <button onClick={() => remove(i)} className="text-gray-300 hover:text-red-400 p-1 transition-colors">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          )}
+        </div>
+      ))}
+      {q.options.length < 6 && (
+        <button onClick={add} className="flex items-center gap-1 text-indigo-600 hover:text-indigo-800 text-sm font-medium">
+          <Ico.Plus/> Ajouter une option
+        </button>
+      )}
+    </div>
+  );
+}
+
+function RatingForm({ q, onChange }) {
+  return (
+    <div className="flex items-center gap-2 flex-wrap">
+      <span className="text-sm text-gray-600">Note maximale :</span>
+      {[3,4,5,7,10].map(n => (
+        <button key={n} onClick={() => onChange({...q, maxStars:n})}
+          className={"w-9 h-9 rounded-xl text-sm font-bold transition-colors " + (q.maxStars===n ? 'bg-amber-500 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200')}>
+          {n}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function QuestionEditor({ initial, onSave, onCancel }) {
+  const [q, setQ] = useState({...initial});
+  const cfg   = T[q.type];
+  const valid = q.text.trim().length > 0 && (q.type !== 'mcq' || q.options.some(o => o.trim()));
+  return (
+    <div className="bg-white rounded-2xl border border-gray-200 p-6 anim-in">
+      <div className="flex items-center gap-2 mb-5">
+        <span className={"px-3 py-1 rounded-full text-xs font-semibold " + cfg.bg + " " + cfg.tx}>{cfg.icon} {cfg.label}</span>
+      </div>
+      <label className="block text-sm font-medium text-gray-700 mb-1.5">Question *</label>
+      <textarea value={q.text} onChange={e => setQ({...q, text:e.target.value})}
+        placeholder="Tapez votre question ici…" rows={2}
+        className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-indigo-300 text-gray-900 resize-none mb-4" autoFocus/>
+      {q.type === 'mcq'       && <MCQForm q={q} onChange={setQ}/>}
+      {q.type === 'rating'    && <RatingForm q={q} onChange={setQ}/>}
+      {q.type === 'wordcloud' && <p className="text-sm text-gray-400 italic">Les participants soumettront un mot ou une courte expression.</p>}
+      {q.type === 'open'      && <p className="text-sm text-gray-400 italic">Les participants répondent librement en texte.</p>}
+      <div className="flex justify-end gap-3 mt-6">
+        <button onClick={onCancel} className="px-4 py-2 text-gray-500 hover:text-gray-800 text-sm font-medium transition-colors">Annuler</button>
+        <button onClick={() => valid && onSave(q)} disabled={!valid}
+          className={"px-5 py-2 rounded-xl text-sm font-bold transition-colors " + (valid ? 'bg-indigo-600 hover:bg-indigo-700 text-white' : 'bg-gray-100 text-gray-400 cursor-not-allowed')}>
+          Enregistrer
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════════════════════
+   RESULTS
+══════════════════════════════════════════════════════════════ */
+const COLORS = ['bg-indigo-500','bg-violet-500','bg-sky-500','bg-emerald-500','bg-rose-500','bg-amber-500'];
+
+function MCQResults({ q, answers }) {
+  const total = answers.length;
+  const votes = q.options.map((opt,i) => ({
+    opt, n: answers.filter(a => Array.isArray(a.v) ? a.v.includes(String(i)) : String(a.v)===String(i)).length,
+  }));
+  return (
+    <div className="space-y-3">
+      <p className="text-sm text-gray-400">{total} réponse{total!==1?'s':''}</p>
+      {votes.map((v,i) => {
+        const pct = total > 0 ? Math.round(v.n/total*100) : 0;
+        return (
+          <div key={i}>
+            <div className="flex justify-between text-sm mb-1">
+              <span className="font-medium text-gray-700">{String.fromCharCode(65+i)}. {v.opt||'Option'}</span>
+              <span className="text-gray-400">{pct}% ({v.n})</span>
+            </div>
+            <div className="w-full h-8 bg-gray-100 rounded-lg overflow-hidden">
+              <div className={"h-full rounded-lg bar " + COLORS[i%COLORS.length]} style={{width:pct+'%'}}/>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function WordCloudResults({ answers }) {
+  const words = useMemo(() => {
+    const m = {};
+    answers.forEach(a => String(a.v).toLowerCase().trim().split(/\s+/).forEach(w => { if(w.length>1) m[w]=(m[w]||0)+1; }));
+    return Object.entries(m).sort((a,b)=>b[1]-a[1]).slice(0,50);
+  }, [answers]);
+  const max = Math.max(...words.map(([,c])=>c),1);
+  const WC  = ['text-indigo-600','text-violet-600','text-sky-500','text-emerald-500','text-rose-500','text-amber-500','text-pink-500','text-teal-500'];
+  if (!words.length) return <p className="text-gray-400 text-sm italic">En attente…</p>;
+  return (
+    <div className="flex flex-wrap gap-x-3 gap-y-1 items-baseline py-2 min-h-20">
+      {words.map(([w,c],i) => (
+        <span key={w} className={"word font-bold " + WC[i%WC.length]}
+          style={{fontSize:(.65+(c/max)*2)+'rem', opacity:.55+(c/max)*.45}}>{w}</span>
+      ))}
+    </div>
+  );
+}
+
+function OpenResults({ answers }) {
+  if (!answers.length) return <p className="text-gray-400 text-sm italic">En attente…</p>;
+  return (
+    <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+      {[...answers].reverse().map((a,i) => (
+        <div key={i} className="bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 text-gray-700 text-sm">{String(a.v)}</div>
+      ))}
+    </div>
+  );
+}
+
+function RatingResults({ q, answers }) {
+  const vals = answers.map(a => Number(a.v));
+  const avg  = vals.length ? vals.reduce((s,v)=>s+v,0)/vals.length : 0;
+  const dist = Array.from({length:q.maxStars},(_,i)=>({n:i+1,c:vals.filter(v=>v===i+1).length}));
+  const maxD = Math.max(...dist.map(d=>d.c),1);
+  return (
+    <div>
+      <div className="flex items-baseline gap-4 mb-5">
+        <span className="text-5xl font-black text-amber-500">{avg.toFixed(1)}</span>
+        <div>
+          <div className="flex gap-0.5 mb-0.5">{Array.from({length:q.maxStars},(_,i)=><Ico.Star key={i} on={i<Math.round(avg)} s={18}/>)}</div>
+          <p className="text-xs text-gray-400">{answers.length} réponse{answers.length!==1?'s':''} · sur {q.maxStars}</p>
+        </div>
+      </div>
+      <div className="space-y-1.5">
+        {dist.map(({n,c}) => (
+          <div key={n} className="flex items-center gap-2">
+            <span className="text-xs text-gray-500 w-4 text-right">{n}</span><Ico.Star on s={11}/>
+            <div className="flex-1 h-3.5 bg-gray-100 rounded-full overflow-hidden">
+              <div className="h-full bg-amber-400 rounded-full bar" style={{width:(c/maxD*100)+'%'}}/>
+            </div>
+            <span className="text-xs text-gray-400 w-5 text-right">{c}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function LiveResults({ q, answers }) {
+  if (!q) return null;
+  const p = {q, answers};
+  return (
+    <div className="anim-up">
+      {q.type==='mcq'       && <MCQResults {...p}/>}
+      {q.type==='wordcloud' && <WordCloudResults {...p}/>}
+      {q.type==='open'      && <OpenResults {...p}/>}
+      {q.type==='rating'    && <RatingResults {...p}/>}
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════════════════════
+   PRESENTER PAGE
+══════════════════════════════════════════════════════════════ */
+function PresenterPage({ code, ltiUser, onNewSession }) {
+  const ev                   = useLive(code);
+  const [selId,  setSelId]   = useState(null);
+  const [editor, setEditor]  = useState(null);
+  const [copied, setCopied]  = useState(false);
+  const [showQR, setShowQR]  = useState(false);
+
+  const totalParticipants = useMemo(() => {
+    if (!ev) return 0;
+    const ids = new Set();
+    Object.values(ev.answers||{}).forEach(arr => {
+      (Array.isArray(arr) ? arr : Object.values(arr)).forEach(a => ids.add(a.pid));
+    });
+    return ids.size;
+  }, [ev]);
+
+  if (!ev) return (
+    <div className="h-full flex items-center justify-center p-8">
+      <p className="text-gray-400">Chargement de l'événement…</p>
+    </div>
+  );
+
+  const mutate = (fn) => dbPatch(code, fn);
+
+  const saveQ = (q) => {
+    mutate(e => {
+      const exists = e.questions.some(x => x.id === q.id);
+      const questions = exists ? e.questions.map(x => x.id===q.id?q:x) : [...e.questions, q];
+      return {...e, questions};
+    });
+    setSelId(q.id); setEditor(null);
+  };
+
+  const deleteQ = (qId) => {
+    mutate(e => ({
+      ...e,
+      questions:  e.questions.filter(q => q.id!==qId),
+      activeQId:  e.activeQId===qId ? null  : e.activeQId,
+      launched:   e.activeQId===qId ? false : e.launched,
+    }));
+    if (selId===qId) setSelId(null);
+    if (editor?.q.id===qId) setEditor(null);
+  };
+
+  const launch = (qId) => mutate(e => ({...e, activeQId:qId, launched:true}));
+  const stop   = ()    => mutate(e => ({...e, launched:false}));
+
+  const copyCode = () => {
+    navigator.clipboard?.writeText(ev.code).catch(()=>{});
+    setCopied(true); setTimeout(()=>setCopied(false),2000);
+  };
+
+  const selQ       = ev.questions.find(q => q.id===selId) || null;
+  const selAnswers = selQ
+    ? (Array.isArray(ev.answers[selId]) ? ev.answers[selId] : Object.values(ev.answers[selId]||{}))
+    : [];
+  const isLive  = ev.launched && ev.activeQId===selId;
+  const joinUrl = baseUrl() + '#/join/' + ev.code;
+
+  return (
+    <div style={{height: ltiUser ? 'calc(100vh - 37px)' : '100vh', display:'flex', flexDirection:'column', background:'#f8fafc', overflow:'hidden'}}>
+      {showQR && <QRModal url={joinUrl} code={ev.code} onClose={()=>setShowQR(false)}/>}
+
+      {/* HEADER */}
+      <header className="bg-white border-b border-gray-200 px-5 py-3 flex items-center justify-between flex-shrink-0">
+        <div className="flex items-center gap-3">
+          {!ltiUser && <button onClick={()=>go('/')} className="text-gray-400 hover:text-gray-700 p-1"><Ico.Back/></button>}
+          <div>
+            <h1 className="font-bold text-gray-900 text-base leading-tight">{ev.title}</h1>
+            <p className="text-xs text-gray-400">{totalParticipants} participant{totalParticipants!==1?'s':''}</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-3">
+          {onNewSession && (
+            <button onClick={onNewSession}
+              className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-800 px-3 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors font-medium">
+              <Ico.Plus/> Nouveau sondage
+            </button>
+          )}
+          <div className="bg-indigo-50 border border-indigo-100 rounded-2xl px-4 py-2 flex items-center gap-2">
+            <div>
+              <p className="text-xs text-indigo-400 font-medium">Code</p>
+              <p className="font-black text-2xl tracking-widest text-indigo-700 leading-none">{ev.code}</p>
+            </div>
+            <button onClick={copyCode} className={"p-2 rounded-xl transition-colors " + (copied?'bg-green-100 text-green-600':'bg-white text-gray-400 hover:text-gray-700')}>
+              {copied ? <Ico.Check s={14}/> : <Ico.Copy/>}
+            </button>
+            <button onClick={()=>setShowQR(true)} className="p-2 rounded-xl bg-indigo-100 text-indigo-600 hover:bg-indigo-200 transition-colors">
+              <Ico.QR/>
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <div style={{display:'flex', flex:1, overflow:'hidden'}}>
+        {/* SIDEBAR */}
+        <aside style={{width:272, flexShrink:0}} className="bg-white border-r border-gray-100 flex flex-col">
+          <div className="p-4 border-b border-gray-100">
+            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Ajouter</p>
+            <div className="grid grid-cols-2 gap-2">
+              {Object.entries(T).map(([type,cfg]) => (
+                <button key={type} onClick={()=>setEditor({q:makeQ(type)})}
+                  className={"flex flex-col items-center gap-1 p-2.5 rounded-xl border-2 text-xs font-semibold transition-all "
+                    + (editor?.q.type===type && !editor.q.text ? 'border-indigo-400 '+cfg.bg : 'border-gray-100 bg-gray-50 hover:border-indigo-200 hover:bg-indigo-50')}>
+                  <span className="text-xl">{cfg.icon}</span>
+                  <span className={editor?.q.type===type && !editor.q.text ? cfg.tx : 'text-gray-600'}>{cfg.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="flex-1 overflow-y-auto p-3">
+            {ev.questions.length === 0 && (
+              <div className="text-center py-8">
+                <p className="text-gray-300 text-3xl mb-2">📋</p>
+                <p className="text-gray-400 text-sm">Aucune question.</p>
+              </div>
+            )}
+            {ev.questions.map((q,i) => {
+              const cfg  = T[q.type];
+              const live = ev.activeQId===q.id && ev.launched;
+              const cnt  = Array.isArray(ev.answers[q.id]) ? ev.answers[q.id].length : Object.keys(ev.answers[q.id]||{}).length;
+              const sel  = selId===q.id;
+              return (
+                <div key={q.id} onClick={()=>{setSelId(q.id);setEditor(null);}}
+                  className={"group flex items-start gap-2 p-3 rounded-xl cursor-pointer mb-1 border transition-all "
+                    + (sel?'bg-indigo-50 border-indigo-200':'border-transparent hover:bg-gray-50')}>
+                  <span className={"w-7 h-7 flex items-center justify-center rounded-lg text-base flex-shrink-0 "+cfg.bg}>{cfg.icon}</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs text-gray-400">Q{i+1}</p>
+                    <p className="text-sm text-gray-700 font-semibold truncate">{q.text||'(sans titre)'}</p>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      {live && <span className="text-xs text-green-600 font-bold live-dot">● En direct</span>}
+                      {cnt>0 && <span className="text-xs text-gray-400">{cnt} rép.</span>}
+                    </div>
+                  </div>
+                  <button onClick={e=>{e.stopPropagation();deleteQ(q.id);}}
+                    className="opacity-0 group-hover:opacity-100 text-gray-300 hover:text-red-500 p-1 rounded transition-all flex-shrink-0">
+                    <Ico.Trash/>
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+          {!ltiUser && (
+            <div className="p-3 border-t border-gray-100">
+              <p className="text-xs text-gray-400 mb-1">Lien participants</p>
+              <div className="bg-gray-50 rounded-lg px-2 py-1.5 text-xs text-gray-400 break-all font-mono">{joinUrl}</div>
+            </div>
+          )}
+        </aside>
+
+        {/* MAIN */}
+        <main className="flex-1 overflow-y-auto p-6">
+          {!selId && !editor && (
+            <div className="h-full flex items-center justify-center">
+              <div className="text-center max-w-sm">
+                <div className="w-20 h-20 bg-indigo-100 rounded-3xl flex items-center justify-center mx-auto mb-4 text-4xl">🎯</div>
+                <h2 className="text-xl font-bold text-gray-700 mb-2">Prêt !</h2>
+                <p className="text-gray-400 text-sm mb-6">Créez une question ou sélectionnez-en une à gauche.</p>
+                <div className="bg-white rounded-2xl border border-gray-200 p-4 text-left">
+                  <p className="text-xs text-gray-400 mb-3">Les participants scannent ou entrent :</p>
+                  <div className="flex items-center gap-4">
+                    <div className="rounded-xl overflow-hidden border border-indigo-100"><QRDisplay url={joinUrl} size={80}/></div>
+                    <div>
+                      <p className="font-black text-3xl text-indigo-600 tracking-widest">{ev.code}</p>
+                      <button onClick={()=>setShowQR(true)} className="mt-1 text-xs text-indigo-500 hover:text-indigo-700 underline">Agrandir</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {editor && (
+            <div className="max-w-2xl" key={editor.q.id}>
+              <QuestionEditor initial={editor.q} onSave={saveQ} onCancel={()=>setEditor(null)}/>
+            </div>
+          )}
+
+          {selQ && !editor && (
+            <div className="max-w-2xl anim-up space-y-4">
+              <div className="bg-white rounded-2xl border border-gray-200 p-6">
+                <div className="flex items-start justify-between gap-3 mb-4">
+                  <span className={"px-3 py-1 rounded-full text-xs font-semibold flex-shrink-0 "+T[selQ.type].bg+" "+T[selQ.type].tx}>
+                    {T[selQ.type].icon} {T[selQ.type].label}
+                  </span>
+                  <div className="flex gap-2">
+                    <button onClick={()=>setEditor({q:{...selQ}})}
+                      className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-800 px-3 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors font-medium">
+                      <Ico.Edit/> Modifier
+                    </button>
+                    {isLive
+                      ? <button onClick={stop} className="flex items-center gap-1.5 px-4 py-1.5 bg-red-500 hover:bg-red-600 text-white text-xs font-bold rounded-lg transition-colors"><Ico.Stop/> Arrêter</button>
+                      : <button onClick={()=>launch(selQ.id)} className="flex items-center gap-1.5 px-4 py-1.5 bg-green-500 hover:bg-green-600 text-white text-xs font-bold rounded-lg transition-colors"><Ico.Play/> Lancer</button>
+                    }
+                  </div>
+                </div>
+                <h2 className="text-xl font-bold text-gray-900 mb-3">{selQ.text||'(sans titre)'}</h2>
+                {selQ.type==='mcq' && (
+                  <ul className="space-y-1">
+                    {selQ.options.map((o,i) => (
+                      <li key={i} className="flex items-center gap-2 text-sm text-gray-600 py-0.5">
+                        <span className="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center text-xs font-bold text-gray-500">{String.fromCharCode(65+i)}</span>
+                        {o||<em className="text-gray-300">—</em>}
+                      </li>
+                    ))}
+                    {selQ.multi && <p className="text-xs text-gray-400 mt-1">Plusieurs réponses autorisées</p>}
+                  </ul>
+                )}
+                {selQ.type==='rating' && <div className="flex gap-1">{Array.from({length:selQ.maxStars},(_,i)=><Ico.Star key={i} on s={22}/>)}</div>}
+                {isLive && (
+                  <div className="mt-4 flex items-center gap-2 text-green-600 text-sm font-semibold">
+                    <span className="w-2 h-2 rounded-full bg-green-500 live-dot"/> Question en direct
+                  </div>
+                )}
+              </div>
+
+              {(isLive || selAnswers.length > 0) && (
+                <div className="bg-white rounded-2xl border border-gray-200 p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="font-bold text-gray-800">Résultats en direct</h3>
+                    <span className="text-sm text-gray-400 bg-gray-100 px-3 py-1 rounded-full">{selAnswers.length} réponse{selAnswers.length!==1?'s':''}</span>
+                  </div>
+                  <LiveResults q={selQ} answers={selAnswers}/>
+                </div>
+              )}
+            </div>
+          )}
+        </main>
+      </div>
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════════════════════
+   PARTICIPANT ANSWER FORMS
+══════════════════════════════════════════════════════════════ */
+function MCQAnswer({ q, onSubmit }) {
+  const [sel, setSel] = useState([]);
+  const toggle = (i) => { const s=String(i); setSel(p=>q.multi?(p.includes(s)?p.filter(v=>v!==s):[...p,s]):[s]); };
+  const ok = sel.length > 0;
+  return (
+    <div className="space-y-3">
+      {q.options.map((opt,i) => {
+        const active = sel.includes(String(i));
+        return (
+          <button key={i} onClick={()=>toggle(i)}
+            className={"w-full flex items-center gap-3 p-4 rounded-2xl border-2 text-left transition-all "+(active?'border-indigo-500 bg-indigo-50':'border-gray-200 hover:border-gray-300 bg-white')}>
+            <div className={"w-9 h-9 rounded-full flex items-center justify-center font-bold text-sm flex-shrink-0 "+(active?'bg-indigo-600 text-white':'bg-gray-100 text-gray-500')}>
+              {q.multi?(active?'✓':''):String.fromCharCode(65+i)}
+            </div>
+            <span className={"font-semibold "+(active?'text-indigo-900':'text-gray-700')}>{opt}</span>
+          </button>
+        );
+      })}
+      <button onClick={()=>ok&&onSubmit(q.multi?sel:sel[0])} disabled={!ok}
+        className={"w-full mt-2 py-4 rounded-2xl font-bold text-lg transition-all "+(ok?'bg-indigo-600 hover:bg-indigo-700 text-white':'bg-gray-100 text-gray-400 cursor-not-allowed')}>
+        Valider
+      </button>
+    </div>
+  );
+}
+
+function WordCloudAnswer({ onSubmit }) {
+  const [val, setVal] = useState('');
+  const ok = val.trim().length > 0;
+  return (
+    <div>
+      <input value={val} onChange={e=>setVal(e.target.value)} placeholder="Un mot ou une expression…"
+        maxLength={30} className="w-full px-5 py-4 text-xl text-center rounded-2xl border-2 border-gray-200 focus:border-sky-400 text-gray-900 font-semibold mb-4"
+        onKeyDown={e=>e.key==='Enter'&&ok&&onSubmit(val.trim())} autoFocus/>
+      <button onClick={()=>ok&&onSubmit(val.trim())} disabled={!ok}
+        className={"w-full py-4 rounded-2xl font-bold text-lg transition-all "+(ok?'bg-sky-500 hover:bg-sky-600 text-white':'bg-gray-100 text-gray-400 cursor-not-allowed')}>
+        Envoyer
+      </button>
+    </div>
+  );
+}
+
+function OpenAnswer({ onSubmit }) {
+  const [val, setVal] = useState('');
+  const ok = val.trim().length > 0;
+  return (
+    <div>
+      <textarea value={val} onChange={e=>setVal(e.target.value)} placeholder="Tapez votre réponse…"
+        rows={4} maxLength={500} className="w-full px-4 py-3 rounded-2xl border-2 border-gray-200 focus:border-emerald-400 text-gray-800 resize-none text-base mb-1" autoFocus/>
+      <p className="text-xs text-gray-400 text-right mb-3">{val.length}/500</p>
+      <button onClick={()=>ok&&onSubmit(val.trim())} disabled={!ok}
+        className={"w-full py-4 rounded-2xl font-bold text-lg transition-all "+(ok?'bg-emerald-500 hover:bg-emerald-600 text-white':'bg-gray-100 text-gray-400 cursor-not-allowed')}>
+        Envoyer
+      </button>
+    </div>
+  );
+}
+
+function RatingAnswer({ q, onSubmit }) {
+  const [rating, setRating] = useState(0);
+  const [hover,  setHover]  = useState(0);
+  return (
+    <div className="text-center">
+      <div className="flex justify-center gap-2 mb-6 flex-wrap">
+        {Array.from({length:q.maxStars},(_,i) => (
+          <button key={i} className="star" onClick={()=>setRating(i+1)} onMouseEnter={()=>setHover(i+1)} onMouseLeave={()=>setHover(0)}>
+            <Ico.Star on={i<(hover||rating)} s={q.maxStars>6?36:48}/>
+          </button>
+        ))}
+      </div>
+      {rating>0 && <p className="text-gray-500 text-sm mb-4">Note : {rating} / {q.maxStars}</p>}
+      <button onClick={()=>rating>0&&onSubmit(rating)} disabled={rating===0}
+        className={"w-full py-4 rounded-2xl font-bold text-lg transition-all "+(rating>0?'bg-amber-500 hover:bg-amber-600 text-white':'bg-gray-100 text-gray-400 cursor-not-allowed')}>
+        Valider
+      </button>
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════════════════════
+   PARTICIPANT PAGE
+══════════════════════════════════════════════════════════════ */
+function ParticipantPage({ initCode, ltiUser, hideBranding }) {
+  const [code,     setCode]     = useState(initCode ? initCode.toUpperCase() : '');
+  const [input,    setInput]    = useState(initCode ? initCode.toUpperCase() : '');
+  const [joined,   setJoined]   = useState(false);
+  const [err,      setErr]      = useState('');
+  const [notFound, setNotFound] = useState(false);
+
+  const [pid] = useState(() => {
+    if (ltiUser?.id) return ltiUser.id;
+    let id = localStorage.getItem('pollapp_pid');
+    if (!id) { id = genId(); localStorage.setItem('pollapp_pid', id); }
+    return id;
+  });
+
+  const ev = useLive(joined ? code : null);
+
+  useEffect(() => {
+    if (initCode) { setCode(initCode.toUpperCase()); setJoined(true); }
+  }, [initCode]);
+
+  useEffect(() => {
+    if (!joined || ev) { setNotFound(false); return; }
+    const t = setTimeout(() => setNotFound(true), 4000);
+    return () => clearTimeout(t);
+  }, [joined, ev]);
+
+  const doJoin = () => {
+    const c = input.trim().toUpperCase();
+    if (c.length < 4) { setErr('Entrez un code valide.'); return; }
+    setErr(''); setNotFound(false); setCode(c); setJoined(true);
+  };
+
+  const submit = (value) => {
+    if (!ev || !ev.activeQId || !ev.launched) return;
+    const participantName = ltiUser?.name || null;
+    evRef(code).transaction(e => {
+      if (!e || !e.activeQId || !e.launched) return;
+      const existing = Array.isArray(e.answers[e.activeQId]) ? e.answers[e.activeQId] : Object.values(e.answers[e.activeQId]||{});
+      const prev = existing.filter(a => a.pid !== pid);
+      return {
+        ...e,
+        answers: { ...e.answers, [e.activeQId]: [...prev, {pid, name: participantName, v: value, ts: Date.now()}] },
+      };
+    });
+  };
+
+  /* JOIN FORM */
+  if (!joined) return (
+    <div className="min-h-screen flex items-center justify-center p-4"
+      style={{background:'linear-gradient(135deg,#4f46e5 0%,#7c3aed 55%,#2563eb 100%)'}}>
+      <div className="bg-white rounded-2xl p-8 w-full max-w-sm shadow-2xl anim-in">
+        <div className="text-center mb-6">
+          <div className="w-16 h-16 bg-indigo-100 rounded-2xl flex items-center justify-center mx-auto mb-3 text-3xl">🙋</div>
+          <h1 className="text-2xl font-bold text-gray-900">Rejoindre</h1>
+          <p className="text-gray-500 text-sm mt-1">Entrez le code affiché par le présentateur</p>
+        </div>
+        <input value={input} onChange={e=>{setInput(e.target.value.toUpperCase());setErr('');}}
+          placeholder="ABC123" maxLength={6} autoFocus
+          className="w-full px-4 py-4 rounded-2xl border-2 border-gray-200 focus:border-indigo-400 text-center font-black text-3xl tracking-widest text-gray-900 mb-2"
+          onKeyDown={e=>e.key==='Enter'&&doJoin()}/>
+        {err && <p className="text-red-500 text-sm text-center mb-2">{err}</p>}
+        <button onClick={doJoin} className="w-full py-3.5 mt-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-2xl text-lg transition-colors">
+          Rejoindre →
+        </button>
+        {!hideBranding && (
+          <button onClick={()=>go('/')} className="w-full mt-3 text-gray-400 hover:text-gray-600 text-sm transition-colors">← Retour</button>
+        )}
+      </div>
+    </div>
+  );
+
+  if (!ev) return (
+    <div className="min-h-screen flex items-center justify-center p-4"
+      style={{background:'linear-gradient(135deg,#4f46e5 0%,#7c3aed 55%,#2563eb 100%)'}}>
+      <div className="bg-white rounded-2xl p-8 w-full max-w-sm shadow-2xl text-center anim-in">
+        {notFound ? (
+          <>
+            <div className="text-5xl mb-4">❌</div>
+            <h2 className="text-xl font-bold text-gray-900 mb-2">Code introuvable</h2>
+            <p className="text-gray-500 text-sm mb-6">Le code <span className="font-bold text-indigo-600">{code}</span> n'existe pas.</p>
+            <button onClick={()=>{setJoined(false);setNotFound(false);setInput(code);}}
+              className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl transition-colors">Réessayer</button>
+          </>
+        ) : (
+          <>
+            <div className="text-5xl mb-4 live-dot" style={{display:'inline-block'}}>⏳</div>
+            <h2 className="text-xl font-bold text-gray-900 mb-2">Connexion…</h2>
+            <p className="text-gray-400 text-sm">{code}</p>
+          </>
+        )}
+      </div>
+    </div>
+  );
+
+  const curQ     = ev.activeQId ? ev.questions.find(q => q.id===ev.activeQId) : null;
+  const isActive = ev.launched && !!curQ;
+  const existingAnswers = curQ ? (Array.isArray(ev.answers[ev.activeQId]) ? ev.answers[ev.activeQId] : Object.values(ev.answers[ev.activeQId]||{})) : [];
+  const answered = !!(ev.activeQId && existingAnswers.some(a => a.pid===pid));
+  const cfg      = curQ ? T[curQ.type] : null;
+
+  return (
+    <div className="min-h-screen bg-slate-50 flex flex-col">
+      {!hideBranding && (
+        <header className="bg-white border-b border-gray-200 px-4 py-3 flex items-center gap-3">
+          <button onClick={()=>{setJoined(false);go('/');}} className="text-gray-400 hover:text-gray-700 p-1"><Ico.Back/></button>
+          <div className="flex-1 min-w-0">
+            <h1 className="font-bold text-gray-900 text-base truncate">{ev.title}</h1>
+            <p className="text-xs text-gray-400">Code : {ev.code}</p>
+          </div>
+        </header>
+      )}
+      {ltiUser && (
+        <div className="bg-indigo-50 px-4 py-2 text-sm text-indigo-700 font-medium border-b border-indigo-100">
+          👋 Connecté en tant que <strong>{ltiUser.name}</strong>
+        </div>
+      )}
+
+      <main className="flex-1 flex items-start justify-center p-4 pt-8">
+        <div className="w-full max-w-md">
+          {!isActive && (
+            <div className="text-center py-16 anim-up">
+              <div className="w-24 h-24 rounded-3xl bg-indigo-100 flex items-center justify-center mx-auto mb-6 text-5xl float">⏳</div>
+              <h2 className="text-2xl font-bold text-gray-800 mb-2">En attente…</h2>
+              <p className="text-gray-500">Le présentateur n'a pas encore lancé de question.</p>
+            </div>
+          )}
+          {isActive && (
+            <div className="space-y-4 anim-in">
+              <div className={"rounded-2xl p-6 text-white bg-gradient-to-br shadow-lg "+cfg.grad}>
+                <span className="text-xs font-bold uppercase tracking-wider opacity-80">{cfg.icon} {cfg.label}</span>
+                <h2 className="text-xl font-extrabold mt-1 leading-snug">{curQ.text}</h2>
+              </div>
+              {answered ? (
+                <div className="bg-white rounded-2xl border-2 border-green-200 p-8 text-center anim-in">
+                  <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-3"><Ico.Check s={30}/></div>
+                  <h3 className="text-xl font-bold text-green-700 mb-1">Réponse envoyée !</h3>
+                  <p className="text-gray-400 text-sm">En attente des résultats…</p>
+                </div>
+              ) : (
+                <div className="bg-white rounded-2xl p-5 border border-gray-100">
+                  {curQ.type==='mcq'       && <MCQAnswer q={curQ} onSubmit={submit}/>}
+                  {curQ.type==='wordcloud' && <WordCloudAnswer onSubmit={submit}/>}
+                  {curQ.type==='open'      && <OpenAnswer onSubmit={submit}/>}
+                  {curQ.type==='rating'    && <RatingAnswer q={curQ} onSubmit={submit}/>}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </main>
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════════════════════
+   HOME PAGE (mode standalone — sans LTI)
+══════════════════════════════════════════════════════════════ */
+function HomePage() {
+  const [panel, setPanel] = useState(null);
+  const [title, setTitle] = useState('');
+  const [code,  setCode]  = useState('');
+  const [err,   setErr]   = useState('');
+
+  const doCreate = () => {
+    const ev = makeEvent(title);
+    dbSave(ev);
+    go('/present/' + ev.code);
+  };
+  const doJoin = () => {
+    const c = code.trim().toUpperCase();
+    if (c.length < 4) { setErr('Entrez un code valide.'); return; }
+    go('/join/' + c);
+  };
+
+  return (
+    <div className="min-h-screen" style={{background:'linear-gradient(135deg,#4f46e5 0%,#7c3aed 55%,#2563eb 100%)'}}>
+      <nav className="flex items-center gap-3 px-8 py-5">
+        <div className="w-9 h-9 bg-white rounded-xl flex items-center justify-center shadow-sm">
+          <span className="text-indigo-600 font-black text-xl">P</span>
+        </div>
+        <span className="text-white font-extrabold text-xl">PollApp</span>
+      </nav>
+      <div className="flex flex-col items-center px-4 pt-8 pb-16">
+        <div className="text-center mb-10 anim-up">
+          <h1 className="text-5xl font-extrabold text-white leading-tight mb-4">
+            Engagez votre audience<br/><span className="text-yellow-300">en temps réel</span>
+          </h1>
+          <p className="text-indigo-200 text-lg max-w-lg mx-auto">Sondages, nuages de mots, quiz — en quelques secondes.</p>
+        </div>
+        {!panel && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5 w-full max-w-xl anim-in">
+            <button onClick={()=>setPanel('create')} className="lift bg-white rounded-2xl p-7 text-left shadow-lg">
+              <div className="w-12 h-12 bg-indigo-100 rounded-2xl flex items-center justify-center mb-4 text-2xl">🎯</div>
+              <h2 className="text-lg font-bold text-gray-900 mb-1">Créer un événement</h2>
+              <p className="text-gray-500 text-sm mb-4">Présentateur — créez et pilotez vos questions.</p>
+              <span className="flex items-center gap-1 text-indigo-600 font-semibold text-sm">Commencer <Ico.Chevron/></span>
+            </button>
+            <button onClick={()=>setPanel('join')} className="lift bg-white rounded-2xl p-7 text-left shadow-lg">
+              <div className="w-12 h-12 bg-violet-100 rounded-2xl flex items-center justify-center mb-4 text-2xl">🙋</div>
+              <h2 className="text-lg font-bold text-gray-900 mb-1">Rejoindre un événement</h2>
+              <p className="text-gray-500 text-sm mb-4">Participant — entrez le code affiché.</p>
+              <span className="flex items-center gap-1 text-violet-600 font-semibold text-sm">Rejoindre <Ico.Chevron/></span>
+            </button>
+          </div>
+        )}
+        {panel==='create' && (
+          <div className="bg-white rounded-2xl p-8 w-full max-w-sm shadow-2xl anim-in">
+            <button onClick={()=>setPanel(null)} className="flex items-center gap-1 text-gray-400 hover:text-gray-700 text-sm mb-5"><Ico.Back/> Retour</button>
+            <h2 className="text-xl font-bold text-gray-900 mb-5">Créer un événement</h2>
+            <input value={title} onChange={e=>setTitle(e.target.value)} placeholder="Nom de l'événement"
+              className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-indigo-400 text-gray-900 mb-4"
+              onKeyDown={e=>e.key==='Enter'&&doCreate()} autoFocus/>
+            <button onClick={doCreate} className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl transition-colors">Créer →</button>
+          </div>
+        )}
+        {panel==='join' && (
+          <div className="bg-white rounded-2xl p-8 w-full max-w-sm shadow-2xl anim-in">
+            <button onClick={()=>{setPanel(null);setErr('');}} className="flex items-center gap-1 text-gray-400 hover:text-gray-700 text-sm mb-5"><Ico.Back/> Retour</button>
+            <h2 className="text-xl font-bold text-gray-900 mb-1">Rejoindre</h2>
+            <p className="text-gray-500 text-sm mb-5">Entrez le code affiché par le présentateur.</p>
+            <input value={code} onChange={e=>{setCode(e.target.value.toUpperCase());setErr('');}}
+              placeholder="ABC123" maxLength={6}
+              className="w-full px-4 py-4 rounded-2xl border-2 border-gray-200 focus:border-violet-400 text-center font-black text-3xl tracking-widest text-gray-900 mb-2"
+              onKeyDown={e=>e.key==='Enter'&&doJoin()} autoFocus/>
+            {err && <p className="text-red-500 text-sm mb-2">{err}</p>}
+            <button onClick={doJoin} className="w-full py-3.5 mt-2 bg-violet-600 hover:bg-violet-700 text-white font-bold rounded-xl text-lg transition-colors">Rejoindre →</button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════════════════════
+   APP ROOT
+══════════════════════════════════════════════════════════════ */
+function App() {
+  const route            = useRoute();
+  const { user, loading } = useLTIUser();
+
+  if (!FB_READY)  return <FirebaseSetupScreen/>;
+  if (loading)    return (
+    <div className="min-h-screen flex items-center justify-center bg-slate-50">
+      <div className="text-center">
+        <div className="w-12 h-12 bg-indigo-100 rounded-2xl flex items-center justify-center mx-auto mb-3 text-2xl">P</div>
+        <p className="text-gray-400 text-sm">Chargement…</p>
+      </div>
+    </div>
+  );
+
+  /* ── MODE LTI (lancé depuis Moodle) ── */
+  if (user) {
+    if (user.role === 'instructor') return <LTIPresenter user={user}/>;
+    return <LTIParticipant user={user}/>;
+  }
+
+  /* ── MODE STANDALONE ── */
+  if (route.page === 'present') return <PresenterPage code={route.code}/>;
+  if (route.page === 'join')    return <ParticipantPage initCode={route.code}/>;
+  return <HomePage/>;
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body>
+</html>
