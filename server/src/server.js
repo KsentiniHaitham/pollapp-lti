@@ -43,8 +43,6 @@ Provider.setup(
 
 /* ════════════════════════════════════════════════════════════════
    2.  CALLBACK après un launch LTI réussi
-   On extrait les infos Moodle du JWT et on les passe au frontend
-   via des paramètres d'URL — simple et sans Provider.protect().
 ════════════════════════════════════════════════════════════════ */
 Provider.onConnect(async (token, _req, res) => {
   try {
@@ -72,7 +70,7 @@ Provider.onConnect(async (token, _req, res) => {
       courseName: token.platformContext?.context?.title    ?? 'Cours',
     });
 
-    console.log(`[LTI Launch] ${name} (${isInstructor ? 'instructor' : 'learner'}) — cours: ${token.platformContext?.context?.title}`);
+    console.log(`[LTI Launch] ${name} (${isInstructor ? 'instructor' : 'learner'})`);
     return res.redirect('/?' + params.toString());
   } catch (err) {
     console.error('[onConnect error]', err.message);
@@ -80,30 +78,28 @@ Provider.onConnect(async (token, _req, res) => {
   }
 });
 
-/* ════════════════════════════════════════════════════════════════
-   2b. Gestion des accès sans token LTI
-   - Routes /api/* → on passe au routeur Express (next())
-   - Autres routes → on sert le SPA React directement
-   On utilise onInvalidToken plutôt que whitelist car c'est plus
-   fiable sur toutes les méthodes HTTP (GET, POST, etc.).
-════════════════════════════════════════════════════════════════ */
+/* Accès direct navigateur (pas de token LTI) → servir le SPA */
 const CLIENT = path.join(__dirname, '../../client');
-Provider.onInvalidToken((req, res, next) => {
-  if (req.path.startsWith('/api/')) return next();
+Provider.onInvalidToken((_req, res) => {
   res.removeHeader('Cross-Origin-Embedder-Policy');
   res.removeHeader('Cross-Origin-Opener-Policy');
   res.sendFile(path.join(CLIENT, 'index.html'));
 });
 
+/* Assets statiques du SPA */
+Provider.app.use((_req, res, next) => {
+  res.removeHeader('Cross-Origin-Embedder-Policy');
+  res.removeHeader('Cross-Origin-Opener-Policy');
+  next();
+});
+Provider.app.use(express.static(CLIENT));
+
 /* ════════════════════════════════════════════════════════════════
-   3.  API REST
+   3.  API REST — routeur indépendant de ltijs
 ════════════════════════════════════════════════════════════════ */
 const api = express.Router();
 api.use(express.json());
 
-/* ── POST /api/auth/register ───────────────────────────────────
-   Inscription enseignant (accès web sans LTI).
-────────────────────────────────────────────────────────────── */
 api.post('/auth/register', async (req, res) => {
   const { name, email, password } = req.body;
   if (!name || !email || !password)
@@ -122,9 +118,6 @@ api.post('/auth/register', async (req, res) => {
   }
 });
 
-/* ── POST /api/auth/login ──────────────────────────────────────
-   Connexion enseignant.
-────────────────────────────────────────────────────────────── */
 api.post('/auth/login', async (req, res) => {
   const { email, password } = req.body;
   if (!email || !password)
@@ -140,9 +133,6 @@ api.post('/auth/login', async (req, res) => {
   }
 });
 
-/* ── GET /api/auth/me ──────────────────────────────────────────
-   Vérifie le token JWT et retourne l'enseignant.
-────────────────────────────────────────────────────────────── */
 api.get('/auth/me', (req, res) => {
   const auth = req.headers.authorization;
   if (!auth?.startsWith('Bearer '))
@@ -155,82 +145,59 @@ api.get('/auth/me', (req, res) => {
   }
 });
 
-/* ── POST /api/platform ────────────────────────────────────────
-   Enregistre une plateforme Moodle.
-   À appeler UNE SEULE FOIS lors de la configuration initiale.
-────────────────────────────────────────────────────────────── */
 api.post('/platform', async (req, res) => {
-  if (req.headers['x-admin-key'] !== process.env.ADMIN_KEY) {
+  if (req.headers['x-admin-key'] !== process.env.ADMIN_KEY)
     return res.status(403).json({ error: 'Clé admin incorrecte' });
-  }
   const { url, clientId, name } = req.body;
-  if (!url || !clientId) {
+  if (!url || !clientId)
     return res.status(400).json({ error: '"url" et "clientId" sont obligatoires' });
-  }
   try {
     await Provider.registerPlatform({
-      url,
-      name:                    name ?? url,
-      clientId,
-      authenticationEndpoint:  `${url}/mod/lti/auth.php`,
-      accesstokenEndpoint:     `${url}/mod/lti/token.php`,
-      authConfig: {
-        method: 'JWK_SET',
-        key:    `${url}/mod/lti/certs.php`,
-      },
+      url, name: name ?? url, clientId,
+      authenticationEndpoint: `${url}/mod/lti/auth.php`,
+      accesstokenEndpoint:    `${url}/mod/lti/token.php`,
+      authConfig: { method: 'JWK_SET', key: `${url}/mod/lti/certs.php` },
     });
     console.log(`[Platform registered] ${url}`);
     return res.json({ success: true, message: `Plateforme ${url} enregistrée.` });
   } catch (err) {
-    console.error('[POST /api/platform]', err.message);
     return res.status(500).json({ error: err.message });
   }
 });
 
-/* ── GET /api/platforms ────────────────────────────────────────
-   Liste les plateformes enregistrées.
-────────────────────────────────────────────────────────────── */
 api.get('/platforms', async (req, res) => {
-  if (req.headers['x-admin-key'] !== process.env.ADMIN_KEY) {
+  if (req.headers['x-admin-key'] !== process.env.ADMIN_KEY)
     return res.status(403).json({ error: 'Clé admin incorrecte' });
-  }
   const platforms = await Provider.getAllPlatforms();
-  return res.json(
-    platforms.map(p => ({ name: p.platformName(), url: p.platformUrl() }))
-  );
+  return res.json(platforms.map(p => ({ name: p.platformName(), url: p.platformUrl() })));
 });
 
-/* ── GET /api/health ───────────────────────────────────────────
-   Vérification de vie.
-────────────────────────────────────────────────────────────── */
 api.get('/health', (_req, res) => res.json({ status: 'ok' }));
 
-Provider.app.use('/api', api);
-
 /* ════════════════════════════════════════════════════════════════
-   4.  FRONTEND STATIQUE (assets JS/CSS/images)
-   Supprime le header COEP posé par helmet/ltijs qui bloque les
-   ressources CDN (Tailwind, React, Firebase…).
-════════════════════════════════════════════════════════════════ */
-Provider.app.use((_req, res, next) => {
-  res.removeHeader('Cross-Origin-Embedder-Policy');
-  res.removeHeader('Cross-Origin-Opener-Policy');
-  next();
-});
-Provider.app.use(express.static(CLIENT));
-
-/* ════════════════════════════════════════════════════════════════
-   5.  DÉMARRAGE
+   4.  DÉMARRAGE — Express principal devant ltijs
+   L'API est montée EN PREMIER sur l'app principale, avant que
+   ltijs ne puisse intercepter les requêtes /api/*.
 ════════════════════════════════════════════════════════════════ */
 const PORT = parseInt(process.env.PORT ?? '3000', 10);
 
-Provider.deploy({ port: PORT })
+Provider.deploy({ serverless: true })
   .then(() => {
-    console.log('');
-    console.log('╔══════════════════════════════════════╗');
-    console.log(`║  ✅  PollApp LTI  →  port ${PORT}       ║`);
-    console.log('╚══════════════════════════════════════╝');
-    console.log('');
+    const app = express();
+
+    /* /api/* → notre routeur, jamais vu par ltijs */
+    app.use('/api', api);
+
+    /* Tout le reste → ltijs (LTI launches + SPA) */
+    app.use(Provider.app);
+
+    app.listen(PORT, () => {
+      console.log('');
+      console.log('╔══════════════════════════════════════╗');
+      console.log(`║  ✅  PollApp LTI  →  port ${PORT}       ║`);
+      console.log('╚══════════════════════════════════════╝');
+      console.log('');
+    });
   })
   .catch(err => {
     console.error('❌ Erreur au démarrage :', err);
