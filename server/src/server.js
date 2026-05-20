@@ -87,7 +87,7 @@ Provider.onConnect(async (token, _req, res) => {
    Sans whitelist, ltijs intercepte tout et renvoie 401.
 ════════════════════════════════════════════════════════════════ */
 Provider.whitelist(
-  { route: new RegExp('^/api/'), method: 'all' },
+  new RegExp('^/api/'),
 );
 
 /* Accès direct navigateur sans token → servir le SPA React.
